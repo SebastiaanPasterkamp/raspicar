@@ -41,6 +41,7 @@ class Car(object):
 
         motor = config.get('motor', {})
         steering = config.get('steering', {})
+        camera = config.get('camera', {})
 
         # Motor PWM pins
         self.motor_speed_controller = motor.get('pwm_speed_ctrl', [
@@ -68,10 +69,29 @@ class Car(object):
             0 # servo driver IC CH0
             ])
         self.rotation_max = steering.get('max_rotation', 75.0)
-        # Default servo position for 'home' or straight
+        # Default servo position for straight forward
         self.rotation_default = steering.get('default', 450.0)
         self.rotation = 0.0
 
+
+        # Pan/Tilt PWM pins
+        self.pan_controller = camera.get('pwm_pan_ctrl', [
+            14 # servo driver IC CH14
+            ])
+        self.tilt_controller = camera.get('pwm_tilt_ctrl', [
+            15 # servo driver IC CH15
+            ])
+        self.pan_max = camera.get('max_pan', 250.0)
+        self.tilt_max = camera.get('max_tilt', 250.0)
+        # Default servo position for straight-up
+        # NOTE: Facing forward is not the base position!
+        self.pan_default = camera.get('pan_default', 450.0)
+        self.tilt_default = camera.get('tilt_default', 450.0)
+        # Default servo position for straight forward
+        self.pan_home = camera.get('pan_home', 0.0)
+        self.tilt_home = camera.get('tilt_home', 0.7)
+        self.pan = 0.0
+        self.tilt = 0.0
 
         # Most common tweaks to the default Settings
         for i in motor.get('flip_direction', []):
@@ -79,7 +99,9 @@ class Car(object):
             self._log("Flipping direction for motor %d" % i)
             self.forward[i], self.backwards[i] = self.backwards[i], self.forward[i]
         self.rotation_default += steering.get('bias', 0.0)
-        
+        self.pan_default += camera.get('pan_bias', 0.0)
+        self.tilt_default += camera.get('tilt_bias', 0.0)
+
         # List of all GPIO pins in use
         self.pins = self.forward + self.backwards
 
@@ -89,6 +111,7 @@ class Car(object):
         self.GPIO.setup(self.pins, self.GPIO.OUT)   # Set all pins' mode as output
 
         self.setSpeed(0.0)
+        self.setPanTilt(self.pan_home, self.tilt_home)
         self.setDirection(0.0)
 
 
@@ -150,11 +173,12 @@ class Car(object):
 
         self.speed = speed
 
+
     def setDirection(self, rotation=0.0):
         # Set rotation ranging from -1.0 to 1.0
         # Straight: rotation = 0.0
-        # Right: 0.0 > rotation >= 1.0
-        # Left: -1.0 <= rotation < 0.0
+        # Left : rotation between -1.0 and 0.0
+        # Right: rotation between 0.0 and 1.0
 
         # Rotation needs to be within -1.0 and 1.0 range
         assert(-1.0 <= rotation <= 1.0)
@@ -166,6 +190,33 @@ class Car(object):
 
         self.rotation = rotation
 
+
+    def setPanTilt(self, pan=0.0, tilt=0.0):
+        # Set pan/tilt ranging from -1.0 to 1.0
+        # Straight-up: pan, tilt = 0.0, 0.0
+        # Assuming no pan:
+        #   Forward: tilt between 0.0 and 1.0
+        #   Backwards: tilt between -1.0 and 0.0
+        # Assuming positive tilt:
+        #   Left : pan between -1.0 and 0.0
+        #   Right: pan between 0.0 and 1.0
+
+        # Pan/Tilt needs to be within -1.0 and 1.0 range
+        assert(-1.0 <= pan <= 1.0)
+        assert(-1.0 <= tilt <= 1.0)
+
+        self._log("Set pan/tilt to %.2f,%.2f = %d + %d, %d + %d" % (
+            pan, tilt,
+            int(pan * self.pan_max), int(self.pan_default),
+            int(tilt * self.tilt_max), int(self.tilt_default)
+            ))
+        self.pwm.write(self.pan_controller, 0,
+                       int(pan * self.pan_max + self.pan_default))
+        self.pwm.write(self.tilt_controller, 0,
+                       int(tilt * self.tilt_max + self.tilt_default))
+
+        self.pan = pan
+        self.tilt = tilt
 
 
 if __name__ == '__main__':
@@ -188,6 +239,14 @@ if __name__ == '__main__':
 
     for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
         car.setDirection(state)
+        time.sleep(0.25)
+
+    for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
+        car.setPanTilt(state, 0.0)
+        time.sleep(0.25)
+
+    for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
+        car.setPanTilt(0.0, state)
         time.sleep(0.25)
 
     car.stop()
