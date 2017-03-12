@@ -46,6 +46,23 @@ class TestCar(unittest.TestCase):
                     case['cfg'], car.backwards, case['backwards']
                     )
                 )
+                
+    def test_steering_config(self):
+        for case in [
+                {'cfg': {'default': 100.0, 'bias': -10.0}, 'expected': 90.0},
+                {'cfg': {'default': 100.0 }, 'expected': 100.0},
+                {'cfg': {'default': 100.0, 'bias': 0.0}, 'expected': 100.0},
+                {'cfg': {'default': 100.0, 'bias': 10.0}, 'expected': 110.0}
+                ]:
+            car = Car(self.pwm, self.GPIO, config={
+                'steering': case['cfg']
+                })
+            self.assertEqual(
+                car.rotation_default, case['expected'],
+                'Steering %r: %r == %r' % (
+                    case['cfg'], car.rotation_default, case['expected']
+                    )
+                )
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
