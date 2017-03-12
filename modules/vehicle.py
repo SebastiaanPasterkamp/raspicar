@@ -183,10 +183,16 @@ class Car(object):
         # Rotation needs to be within -1.0 and 1.0 range
         assert(-1.0 <= rotation <= 1.0)
 
-        self._log("Set rotation to %.2f = %d + %d" % (
-            rotation, int(rotation * self.rotation_max), int(self.rotation_default)))
+        self._log("Set rotation to %.2f = %d - %d" % (
+            rotation,
+            int(self.rotation_default),
+            int(rotation * self.rotation_max)
+            ))
         for direction_ctrl in self.steering_controller:
-            self.pwm.write(direction_ctrl, 0, int(rotation * self.rotation_max + self.rotation_default))
+            self.pwm.write(
+                direction_ctrl, 0,
+                int(self.rotation_default - rotation * self.rotation_max)
+                )
 
         self.rotation = rotation
 
@@ -210,10 +216,16 @@ class Car(object):
             int(pan * self.pan_max), int(self.pan_default),
             int(tilt * self.tilt_max), int(self.tilt_default)
             ))
-        self.pwm.write(self.pan_controller, 0,
-                       int(pan * self.pan_max + self.pan_default))
-        self.pwm.write(self.tilt_controller, 0,
-                       int(tilt * self.tilt_max + self.tilt_default))
+        for pan_ctrl in self.pan_controller:
+            self.pwm.write(
+                pan_ctrl, 0,
+                int(self.pan_default + pan * self.pan_max)
+                )
+        for tilt_ctrl in self.tilt_controller:
+            self.pwm.write(
+                tilt_ctrl, 0,
+                int(self.tilt_default - tilt * self.tilt_max)
+                )
 
         self.pan = pan
         self.tilt = tilt
@@ -232,6 +244,8 @@ if __name__ == '__main__':
 
     car = Car(pwm, GPIO, config=config, debug=True)
     car.start()
+
+    car.setPanTilt(0.0, 0.0)
 
     for state in [0.25, 0.5, 0.25, 0.0, -0.25, -0.5, -0.25, 0.0]:
         car.setSpeed(state)
