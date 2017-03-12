@@ -26,17 +26,26 @@ class TestCar(unittest.TestCase):
     
     def test_motor_config(self):
         for case in [
-                {'cfg': [], 'test': [[11, 13], [12, 15]]},
-                {'cfg': [0], 'test': [[12, 13], [11, 15]]},
-                {'cfg': [1], 'test': [[11, 15], [12, 13]]},
-                {'cfg': [0,1], 'test': [[12, 15], [11, 13]]}
+                {'cfg': [], 'forward': [11, 13], 'backwards': [12, 15]},
+                {'cfg': [0], 'forward': [12, 13], 'backwards': [11, 15]},
+                {'cfg': [1], 'forward': [11, 15], 'backwards': [12, 13]},
+                {'cfg': [0,1], 'forward': [12, 15], 'backwards': [11, 13]}
                 ]:
             car = Car(self.pwm, self.GPIO, config={
-                'flip_direction': case['cfg']
+                'motor': {'flip_direction': case['cfg']}
                 })
             self.assertEqual(
-                car.forward, case['test'][0], 'Forward: %r' % case['cfg']
+                car.forward, case['forward'],
+                'Forward %r: %r == %r' % (
+                    case['cfg'], car.forward, case['forward']
+                    )
+                )
+            self.assertEqual(
+                car.backwards, case['backwards'],
+                'Forward %r: %r == %r' % (
+                    case['cfg'], car.backwards, case['backwards']
+                    )
                 )
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)
