@@ -6,6 +6,10 @@ import os
 import sys
 import json
 
+sys.path.append(os.path.join(
+    os.path.dirname(os.path.realpath(__file__)), '..'
+    ))
+
 import RPi.GPIO as GPIO
 from sunfounder.PCA9685 import PWM
 import time    # Import necessary modules
@@ -13,40 +17,10 @@ import time    # Import necessary modules
 class Car(object):
     """Car type - uses a bicycle style motion model
 
-    - 2 motors for motion (engine direction can be flipped in config)
-    - 1 servo for steering
+    - motors for motion
+    - servo for steering
+    - pan/tilt camera
     """
-
-    # List of all GPIO pins
-    pins = []
-
-    # Motor PWM pins
-    motor_speed_controller = [
-        4,  # servo driver IC CH4
-        5   # servo driver IC CH5
-        ]
-
-    # Motor GPIO pins to set HIGH when moving forward
-    forward = [
-        11, # pin11 - motor 0
-        13  # pin13 - motor 1
-        ]
-    # Motor GPIO pins to set HIGH when moving backwards
-    backwards = [
-        12, # pin12 - motor 0
-        15  # pin15 - motor 1
-        ]
-    speed = 0.0
-    speed_max = 4000.0 # Max value for PWM
-
-    # Steering PWM pin
-    steering_controller = [
-        0 # servo driver IC CH0
-        ]
-    rotation = 0.0
-    rotation_max = 75.0
-    rotation_offset = 450.0 # Default servo position for 'home' or straight
-
 
     def __init__(self, pwm, GPIO, config={}, debug=False):
         """Create car type motion controller
@@ -60,24 +34,57 @@ class Car(object):
         - rotation_offset : change in default PWM for steering servo
                             0.0 for 'home' or straight
         """
-
         self.pwm = pwm
         self.GPIO = GPIO
         self.config = config
         self.debug = debug
 
-        for i in config.get('flip_direction', []):
+        motor = config.get('motor', {})
+        steering = config.get('steering', {})
+
+        # Motor PWM pins
+        self.motor_speed_controller = motor.get('pwm_speed_ctrl', [
+            4,  # servo driver IC CH4
+            5   # servo driver IC CH5
+            ])
+
+        # Motor GPIO pins to set HIGH when moving forward
+        self.forward = motor.get('forward', [
+            11, # pin11 - motor 0
+            13  # pin13 - motor 1
+            ])
+        # Motor GPIO pins to set HIGH when moving backwards
+        self.backwards = motor.get('backwards', [
+            12, # pin12 - motor 0
+            15  # pin15 - motor 1
+            ])
+        # Max value for PWM
+        self.speed_max = motor.get('max_speed', 4000.0) 
+        self.speed = 0.0
+
+        
+        # Steering PWM pin
+        self.steering_controller = steering.get('pwm_direction_ctrl', [
+            0 # servo driver IC CH0
+            ])
+        self.rotation_max = steering.get('max_rotation', 75.0)
+        # Default servo position for 'home' or straight
+        self.rotation_default = steering.get('default', 450.0)
+        self.rotation = 0.0
+
+
+        # Most common tweaks to the default Settings
+        for i in motor.get('flip_direction', []):
             # Flip direction of motor
             self._log("Flipping direction for motor %d" % i)
             self.forward[i], self.backwards[i] = self.backwards[i], self.forward[i]
-        self.speed_max = config.get('speed_max', 4000.0)
-
-        self.rotation_max = config.get('rotation_max', 50.0)
-        self.rotation_offset += config.get('rotation_offset', 0.0)
+        self.rotation_default += steering.get('bias', 0.0)
+        
+        # List of all GPIO pins in use
+        self.pins = self.forward + self.backwards
 
 
     def start(self):
-        self.pins = self.forward + self.backwards
         self._log("Setting up pins for output: %r" % self.pins)
         self.GPIO.setup(self.pins, self.GPIO.OUT)   # Set all pins' mode as output
 
@@ -153,9 +160,9 @@ class Car(object):
         assert(-1.0 <= rotation <= 1.0)
 
         self._log("Set rotation to %.2f = %d + %d" % (
-            rotation, int(rotation * self.rotation_max), int(self.rotation_offset)))
+            rotation, int(rotation * self.rotation_max), int(self.rotation_default)))
         for direction_ctrl in self.steering_controller:
-            self.pwm.write(direction_ctrl, 0, int(rotation * self.rotation_max + self.rotation_offset))
+            self.pwm.write(direction_ctrl, 0, int(rotation * self.rotation_max + self.rotation_default))
 
         self.rotation = rotation
 
@@ -167,17 +174,21 @@ if __name__ == '__main__':
     pwm.frequency = 60
 
     config = {}
-    if os.path.exists('config.json'):
-        with open('config.json', 'r') as config_json:
+    config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'config.json')
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as config_json:
             config = json.load(config_json)
 
     car = Car(pwm, GPIO, config=config, debug=True)
     car.start()
 
-    for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
+    for state in [0.25, 0.5, 0.25, 0.0, -0.25, -0.5, -0.25, 0.0]:
         car.setSpeed(state)
+        time.sleep(0.25)
+
+    for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
         car.setDirection(state)
-        time.sleep(0.5)
+        time.sleep(0.25)
 
     car.stop()
 
