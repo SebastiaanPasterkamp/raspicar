@@ -10,7 +10,7 @@ import RPi.GPIO as GPIO
 from sunfounder.PCA9685 import PWM
 import time    # Import necessary modules
 
-class Car:
+class Car(object):
     """Car type - uses a bicycle style motion model
 
     - 2 motors for motion (engine direction can be flipped in config)
@@ -48,7 +48,7 @@ class Car:
     rotation_offset = 450.0 # Default servo position for 'home' or straight
 
 
-    def __init__(self, pwm, config={}, debug=False):
+    def __init__(self, pwm, GPIO, config={}, debug=False):
         """Create car type motion controller
 
         pwm = Sunfounder's PWM servo controller instance
@@ -62,6 +62,7 @@ class Car:
         """
 
         self.pwm = pwm
+        self.GPIO = GPIO
         self.config = config
         self.debug = debug
 
@@ -78,7 +79,7 @@ class Car:
     def start(self):
         self.pins = self.forward + self.backwards
         self._log("Setting up pins for output: %r" % self.pins)
-        GPIO.setup(self.pins, GPIO.OUT)   # Set all pins' mode as output
+        self.GPIO.setup(self.pins, self.GPIO.OUT)   # Set all pins' mode as output
 
         self.setSpeed(0.0)
         self.setDirection(0.0)
@@ -93,7 +94,7 @@ class Car:
         self.setSpeed(0.0)
         self.setDirection(0.0)
         self._log("Releasing GPIO pins: %r" % self.pins)
-        GPIO.cleanup(self.pins)
+        self.GPIO.cleanup(self.pins)
 
 
     def setSpeed(self, speed=0.0):
@@ -113,24 +114,32 @@ class Car:
             self._log("Dir changed: %.2f -> %.2f." % (self.speed, speed))
             for speed_ctrl in self.motor_speed_controller:
                 self.pwm.write(speed_ctrl, 0, 0)
-            self._log("Set pins %r to %r" % (self.forward + self.backwards, GPIO.LOW))
-            GPIO.output(self.forward + self.backwards, GPIO.LOW)
+            self._log("Set pins %r to %r" % (
+                self.forward + self.backwards, self.GPIO.LOW
+                ))
+            self.GPIO.output(
+                self.forward + self.backwards, self.GPIO.LOW)
 
         if speed:
             # Movement required. Set motor speed (always positive value)
             self._log("Set speed to %.2f = %d" % (
-                speed, int(abs(speed) * self.speed_max)))
+                speed, int(abs(speed) * self.speed_max)
+                ))
             for speed_ctrl in self.motor_speed_controller:
                 self.pwm.write(speed_ctrl, 0, int(abs(speed) * self.speed_max))
 
         if speed > 0.0:
             # Positive speed; Move forward
-            self._log("Set pins %r to %r" % (self.forward, GPIO.HIGH))
-            GPIO.output(self.forward, GPIO.HIGH)
+            self._log("Set pins %r to %r" % (
+                self.forward, self.GPIO.HIGH
+                ))
+            self.GPIO.output(self.forward, self.GPIO.HIGH)
         elif speed < 0.0:
             # Negative speed; move backward
-            self._log("Set pins %r to %r" % (self.backwards, GPIO.HIGH))
-            GPIO.output(self.backwards, GPIO.HIGH)
+            self._log("Set pins %r to %r" % (
+                self.backwards, self.GPIO.HIGH
+                ))
+            self.GPIO.output(self.backwards, self.GPIO.HIGH)
 
         self.speed = speed
 
@@ -162,7 +171,7 @@ if __name__ == '__main__':
         with open('config.json', 'r') as config_json:
             config = json.load(config_json)
 
-    car = Car(pwm, config=config, debug=True)
+    car = Car(pwm, GPIO, config=config, debug=True)
     car.start()
 
     for state in [0.5, 1.0, 0.5, 0.0, -0.5, -1.0, -0.5, 0.0]:
