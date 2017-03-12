@@ -46,7 +46,8 @@ class TestCar(unittest.TestCase):
                     case['cfg'], car.backwards, case['backwards']
                     )
                 )
-                
+
+
     def test_steering_config(self):
         for case in [
                 {'cfg': {'default': 100.0, 'bias': -10.0}, 'expected': 90.0},
@@ -61,6 +62,40 @@ class TestCar(unittest.TestCase):
                 car.rotation_default, case['expected'],
                 'Steering %r: %r == %r' % (
                     case['cfg'], car.rotation_default, case['expected']
+                    )
+                )
+
+
+    def test_camera_config(self):
+        for case in [
+                {'cfg': {'pan_default': 100.0, 'pan_bias': -10.0}, 'expected': 90.0},
+                {'cfg': {'pan_default': 100.0 }, 'expected': 100.0},
+                {'cfg': {'pan_default': 100.0, 'pan_bias': 0.0}, 'expected': 100.0},
+                {'cfg': {'pan_default': 100.0, 'pan_bias': 10.0}, 'expected': 110.0}
+                ]:
+            car = Car(self.pwm, self.GPIO, config={
+                'camera': case['cfg']
+                })
+            self.assertEqual(
+                car.pan_default, case['expected'],
+                'Camera pan %r: %r == %r' % (
+                    case['cfg'], car.pan_default, case['expected']
+                    )
+                )
+
+        for case in [
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': -10.0}, 'expected': 90.0},
+                {'cfg': {'tilt_default': 100.0 }, 'expected': 100.0},
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 0.0}, 'expected': 100.0},
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 10.0}, 'expected': 110.0}
+                ]:
+            car = Car(self.pwm, self.GPIO, config={
+                'camera': case['cfg']
+                })
+            self.assertEqual(
+                car.tilt_default, case['expected'],
+                'Camera tilt %r: %r == %r' % (
+                    case['cfg'], car.tilt_default, case['expected']
                     )
                 )
 
