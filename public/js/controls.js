@@ -67,7 +67,13 @@ var update = function (modifier) {
 
     if (updated) {
         console.log(car);
-        $.post('/control', car, 'json');
+        $.ajax({
+            type: 'POST',
+            url: '/control',
+            data: JSON.stringify(car),
+            contentType: "application/json",
+            dataType: 'json'
+       });
     }
 
     ctx.fillStyle = "rgb(250, 250, 250)";
