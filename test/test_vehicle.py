@@ -8,28 +8,22 @@ sys.path.append(os.path.join(
     os.path.dirname(os.path.realpath(__file__)), '..'
     ))
 
+from mockobjects import MockGPIO as GPIO, MockPWM as PWM
 from modules.vehicle import Car
 
-class MockPWM(object):
-    def __init__(self):
-        self.command_log = []
-
-class MockGPIO(object):
-    def __init__(self):
-        self.command_log = []
 
 class TestCar(unittest.TestCase):
-    
+
     def setUp(self):
-        self.pwm = MockPWM()
-        self.GPIO = MockGPIO()
-    
+        self.pwm = PWM()
+        self.GPIO = GPIO()
+
     def test_motor_config(self):
         for case in [
                 {'cfg': [], 'forward': [11, 13], 'backwards': [12, 15]},
                 {'cfg': [0], 'forward': [12, 13], 'backwards': [11, 15]},
                 {'cfg': [1], 'forward': [11, 15], 'backwards': [12, 13]},
-                {'cfg': [0,1], 'forward': [12, 15], 'backwards': [11, 13]}
+                {'cfg': [0, 1], 'forward': [12, 15], 'backwards': [11, 13]}
                 ]:
             car = Car(self.pwm, self.GPIO, config={
                 'motor': {'flip_direction': case['cfg']}
@@ -47,13 +41,16 @@ class TestCar(unittest.TestCase):
                     )
                 )
 
-
     def test_steering_config(self):
         for case in [
-                {'cfg': {'default': 100.0, 'bias': -10.0}, 'expected': 90.0},
-                {'cfg': {'default': 100.0 }, 'expected': 100.0},
-                {'cfg': {'default': 100.0, 'bias': 0.0}, 'expected': 100.0},
-                {'cfg': {'default': 100.0, 'bias': 10.0}, 'expected': 110.0}
+                {'cfg': {'default': 100.0, 'bias': -10.0},
+                 'expected': 90.0},
+                {'cfg': {'default': 100.0},
+                 'expected': 100.0},
+                {'cfg': {'default': 100.0, 'bias': 0.0},
+                 'expected': 100.0},
+                {'cfg': {'default': 100.0, 'bias': 10.0},
+                 'expected': 110.0}
                 ]:
             car = Car(self.pwm, self.GPIO, config={
                 'steering': case['cfg']
@@ -65,13 +62,16 @@ class TestCar(unittest.TestCase):
                     )
                 )
 
-
     def test_camera_config(self):
         for case in [
-                {'cfg': {'pan_default': 100.0, 'pan_bias': -10.0}, 'expected': 90.0},
-                {'cfg': {'pan_default': 100.0 }, 'expected': 100.0},
-                {'cfg': {'pan_default': 100.0, 'pan_bias': 0.0}, 'expected': 100.0},
-                {'cfg': {'pan_default': 100.0, 'pan_bias': 10.0}, 'expected': 110.0}
+                {'cfg': {'pan_default': 100.0, 'pan_bias': -10.0},
+                 'expected': 90.0},
+                {'cfg': {'pan_default': 100.0},
+                 'expected': 100.0},
+                {'cfg': {'pan_default': 100.0, 'pan_bias': 0.0},
+                 'expected': 100.0},
+                {'cfg': {'pan_default': 100.0, 'pan_bias': 10.0},
+                 'expected': 110.0}
                 ]:
             car = Car(self.pwm, self.GPIO, config={
                 'camera': case['cfg']
@@ -84,10 +84,14 @@ class TestCar(unittest.TestCase):
                 )
 
         for case in [
-                {'cfg': {'tilt_default': 100.0, 'tilt_bias': -10.0}, 'expected': 90.0},
-                {'cfg': {'tilt_default': 100.0 }, 'expected': 100.0},
-                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 0.0}, 'expected': 100.0},
-                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 10.0}, 'expected': 110.0}
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': -10.0},
+                 'expected': 90.0},
+                {'cfg': {'tilt_default': 100.0},
+                 'expected': 100.0},
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 0.0},
+                 'expected': 100.0},
+                {'cfg': {'tilt_default': 100.0, 'tilt_bias': 10.0},
+                 'expected': 110.0}
                 ]:
             car = Car(self.pwm, self.GPIO, config={
                 'camera': case['cfg']
