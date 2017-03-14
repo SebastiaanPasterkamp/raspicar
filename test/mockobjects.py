@@ -45,7 +45,8 @@ class MockGPIO(MockObject):
             'BOARD': 'BOARD',
             'setup': self.mock_call,
             'output': self.mock_call,
-            'setmode': self.mock_call
+            'setmode': self.mock_call,
+            'cleanup': self.mock_call
             }
 
 class MockPWM(MockObject):

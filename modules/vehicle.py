@@ -232,20 +232,21 @@ class Car(object):
 
 
 if __name__ == '__main__':
-    GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
+    gpio = GPIO()
+    gpio.setmode(gpio.BOARD)    # Number GPIOs by its physical location
     pwm = PWM()                 # The servo controller.
     pwm.frequency = 60
 
     import os
 
     config = {}
-    config_file = os.path.join(os.path.abspath(
+    config_file = os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..', 'config.json'))
     if os.path.exists(config_file):
         with open(config_file, 'r') as config_json:
             config = json.load(config_json)
 
-    car = Car(pwm, GPIO, config=config, debug=True)
+    car = Car(pwm, gpio, config=config, debug=True)
     car.start()
 
     car.setPanTilt(0.0, 0.0)
