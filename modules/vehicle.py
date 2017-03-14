@@ -12,11 +12,9 @@ try:
     from sunfounder.PCA9685 import PWM
 except:
     import os
-    sys.path.append(os.path.abspath(os.path.join(
+    sys.path.insert(0, os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..'
         )))
-
-    print sys.path
 
     from test.mockobjects import MockGPIO as GPIO, MockPWM as PWM
 
@@ -152,6 +150,7 @@ class Car(object):
                 ))
             self.GPIO.output(
                 self.forward + self.backwards, self.GPIO.LOW)
+            self.speed = 0.0
 
         if speed:
             # Movement required. Set motor speed (always positive value)
@@ -161,13 +160,13 @@ class Car(object):
             for speed_ctrl in self.motor_speed_controller:
                 self.pwm.write(speed_ctrl, 0, int(abs(speed) * self.speed_max))
 
-        if speed > 0.0:
+        if self.speed == 0.0 and speed > 0.0:
             # Positive speed; Move forward
             self._log("Set pins %r to %r" % (
                 self.forward, self.GPIO.HIGH
                 ))
             self.GPIO.output(self.forward, self.GPIO.HIGH)
-        elif speed < 0.0:
+        elif self.speed == 0.0 and speed < 0.0:
             # Negative speed; move backward
             self._log("Set pins %r to %r" % (
                 self.backwards, self.GPIO.HIGH
