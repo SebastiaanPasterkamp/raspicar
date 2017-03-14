@@ -4,7 +4,7 @@ import unittest
 import os
 import sys
 
-sys.path.append(os.path.join(
+sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.realpath(__file__)), '..'
     ))
 
@@ -102,6 +102,115 @@ class TestCar(unittest.TestCase):
                     case['cfg'], car.tilt_default, case['expected']
                     )
                 )
+
+    def test_init(self):
+        car = Car(self.pwm, self.GPIO)
+        self.assertEqual(
+            self.pwm.log, []
+            )
+        self.assertEqual(
+            self.GPIO.log, []
+            )
+
+        car.start()
+        configured_channels = [0, 4, 5, 14, 15]
+        self.assertEqual([
+            channel
+            for channel in configured_channels
+            if any([
+                log[0] == 'write' and log[1][0] == channel
+                for log in self.pwm.log
+                ])
+            ],
+            configured_channels
+            )
+        gpio_setup = [
+            [log[0], log[1][1]]
+            for log in self.GPIO.log
+            if log[0] in ['setup', 'output']
+            ]
+        self.assertEqual(gpio_setup, [
+            ['setup', 'OUT'],
+            ['output', 'LOW']
+            ])
+
+    def test_speed(self):
+        car = Car(self.pwm, self.GPIO)
+        car.start()
+
+        self.GPIO.mock_reset_log()
+        self.pwm.mock_reset_log()
+
+        car.setSpeed(-1)
+        self.assertEqual(
+            len([
+                log
+                for log in self.pwm.log
+                if log[0] == 'write' and log[1][2] > 0.0
+                ]),
+            2, "2 motors should start running")
+        self.assertEqual(
+            [
+                [log[0], log[1][1]]
+                for log in self.GPIO.log
+                if log[0] in ['setup', 'output']
+            ], [
+                ['output', 'HIGH']
+            ], "No more setup, only activate motors")
+
+        self.GPIO.mock_reset_log()
+        self.pwm.mock_reset_log()
+
+        car.setSpeed(.5)
+        self.assertEqual(
+            len([
+                log
+                for log in self.pwm.log
+                if log[0] == 'write' and log[1][2] == 0.0
+                ]),
+            2, "motors should stop before reversing direction")
+        self.assertEqual(
+            len([
+                log
+                for log in self.pwm.log
+                if log[0] == 'write' and log[1][2] > 0.0
+                ]),
+            2, "2 motors should start running again")
+        self.assertEqual(
+            [
+                [log[0], log[1][1]]
+                for log in self.GPIO.log
+                if log[0] in ['setup', 'output']
+            ], [
+                ['output', 'LOW'],
+                ['output', 'HIGH']
+            ], "Stop forward motion, start backwards motion")
+
+        self.GPIO.mock_reset_log()
+        self.pwm.mock_reset_log()
+
+        car.setSpeed(1)
+        self.assertEqual(
+            len([
+                log
+                for log in self.pwm.log
+                if log[0] == 'write' and log[1][2] == 0.0
+                ]),
+            0, "same direction; motors don't have to stop")
+        self.assertEqual(
+            len([
+                log
+                for log in self.pwm.log
+                if log[0] == 'write' and log[1][2] > 0.0
+                ]),
+            2, "2 motors should be running on different speed")
+        self.assertEqual(
+            [
+                [log[0], log[1][1]]
+                for log in self.GPIO.log
+                if log[0] in ['setup', 'output']
+            ], [
+            ], "No motors switched")
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
