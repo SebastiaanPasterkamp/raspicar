@@ -1,0 +1,12 @@
+canvas:-webkit-full-screen {
+  width: 100% !important;
+}
+canvas:-moz-full-screen {
+  width: 100% !important;
+}
+canvas:-ms-fullscreen {
+  width: 100% !important;
+}
+canvas:fullscreen {
+  width: 100% !important;
+}
