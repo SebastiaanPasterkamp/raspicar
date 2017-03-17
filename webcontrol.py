@@ -16,33 +16,65 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 
 import sys
 import os
-#import picamera
+import cv
+import time
+import json
 
-camera = None
+import RPi.GPIO as GPIO
+from sunfounder.PCA9685 import PWM
+from modules.vehicle import Car
+
+capture = cv.CaptureFromCAM(-1)
+img = cv.QueryFrame(capture)
+cameraQuality=75
+
+config = {}
+config_file = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), 'config.json'))
+if os.path.exists(config_file):
+    with open(config_file, 'r') as config_json:
+        config = json.load(config_json)
+
+GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
+pwm = PWM()                 # The servo controller.
+pwm.frequency = 60
+
+car = Car(pwm, GPIO, config=config, debug=True)
+car.start()
+
 
 class CarControl(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/camera':
             self.send_response(200)
-            self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
-            self.end_headers()
-            stream=io.BytesIO()
-            try:
-                global camera
-                start=time.time()
-                for foo in camera.capture_continuous(stream,'jpeg'):
-                    self.wfile.write("--jpgboundary")
-                    self.send_header('Content-type','image/jpeg')
-                    self.send_header('Content-length',len(stream.getvalue()))
-                    self.end_headers()
-                    self.wfile.write(stream.getvalue())
-                    stream.seek(0)
-                    stream.truncate()
-                    time.sleep(.5)
-            except KeyboardInterrupt:
-                pass
+            self.wfile.write("Content-Type: multipart/x-mixed-replace; boundary=--aaboundary")
+            self.wfile.write("\r\n\r\n")
+
+            while 1:
+		try:
+                    img = cv.QueryFrame(capture)
+                    cv2mat=cv.EncodeImage(".jpeg",img,(cv.CV_IMWRITE_JPEG_QUALITY,cameraQuality))
+                    JpegData=cv2mat.tostring()
+                    self.wfile.write("--aaboundary\r\n")
+                    self.wfile.write("Content-Type: image/jpeg\r\n")
+                    self.wfile.write("Content-length: "+str(len(JpegData))+"\r\n\r\n" )
+                    self.wfile.write(JpegData)
+                    self.wfile.write("\r\n\r\n\r\n")
+                    time.sleep(0.05)
+                except:
+                    pass
+            return
         else:
             return SimpleHTTPRequestHandler.do_GET(self)
+
+    def do_POST(self):
+        if self.path == '/control':
+            data_string = self.rfile.read(int(self.headers['Content-Length']))
+            print data_string
+            data = json.loads(data_string)
+
+            car.setSpeed(data['speed'])
+            car.setDirection(data['direction'])
 
 
 if __name__ == "__main__":
@@ -54,13 +86,9 @@ if __name__ == "__main__":
 
     os.chdir(public_dir)
 
-    camera = picamera.PiCamera()
-    camera.resolution = (640, 480)
-
     server = ThreadingSimpleServer(('', port), CarControl)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        camera.close()
-        server.socket.close()
+        server.shutdown()
         print("Finished")
