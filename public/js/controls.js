@@ -83,7 +83,6 @@ var relativeCoords = function(event, rect) {
 };
 
 var isInside = function(point, area) {
-    console.log(['isInside', point.x, point.y, area.x, area.y]);
     return (
         point.x >= area.x && point.x <= area.x + area.width
         && point.y >= area.y && point.y <= area.y + area.height
@@ -187,6 +186,7 @@ addEventListener("keyup", function (e) {
 
 setInterval(function() {
     var updates = {};
+    var updated = false;
     for (var i=0; i<controls.length; i++) {
         var control = controls[i];
         if (control.updated) {
@@ -194,10 +194,10 @@ setInterval(function() {
             updates[control.name][control.x.name] = control.x.value;
             updates[control.name][control.y.name] = control.y.value;
             control.updated = false;
+            updated = true;
         }
     }
-    if (updates.length) {
-        console.log(updates);
+    if (updated) {
         $.ajax({
             type: 'POST',
             url: '/control',
