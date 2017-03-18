@@ -60,7 +60,7 @@ var controls = [
             name: 'pan'
         },
         y: {
-            value: 0.0,
+            value: 0.7,
             name: 'tilt'
         },
         updated: false,
