@@ -35,7 +35,6 @@ except:
 from modules.vehicle import Car
 
 capture = cv.CaptureFromCAM(-1)
-img = cv.QueryFrame(capture)
 cameraQuality=75
 
 config = {}
@@ -52,7 +51,7 @@ pwm.frequency = 60
 car = Car(pwm, GPIO, config=config, debug=True)
 car.start()
 
-
+running = True
 class CarControl(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/camera':
@@ -60,7 +59,7 @@ class CarControl(SimpleHTTPRequestHandler):
             self.wfile.write("Content-Type: multipart/x-mixed-replace; boundary=--aaboundary")
             self.wfile.write("\r\n\r\n")
 
-            while 1:
+            while running:
 		try:
                     img = cv.QueryFrame(capture)
                     cv2mat=cv.EncodeImage(".jpeg",img,(cv.CV_IMWRITE_JPEG_QUALITY,cameraQuality))
@@ -101,5 +100,7 @@ if __name__ == "__main__":
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        del(capture)
+        running = False
         server.shutdown()
         print("Finished")
