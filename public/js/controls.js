@@ -30,41 +30,75 @@ function fullscreen() {
 }
 canvas.addEventListener("click",fullscreen);
 
+var isInside = function(point) {
+    var area = this.area();
+    return (
+        point.x >= area.x && point.x <= area.x + area.width
+        && point.y >= area.y && point.y <= area.y + area.height
+    );
+};
+
+var setValues = function(point) {
+    var area = this.area();
+    this.x.value = Math.min(1.0, Math.max(-1.0,
+        (point.x - area.x - (area.width/2)) / (area.width/2)
+    ));
+    this.y.value = Math.min(1.0, Math.max(-1.0,
+        -(point.y - area.y - (area.height/2)) / (area.height/2)
+    ));
+    this.updated = true;
+};
+
+var resetValues = function() {
+    this.x.value = this.x.default;
+    this.y.value = this.y.default;
+    this.updated = true;
+};
+
 var controls = [
     {
         id: null, // Touch.identifier currently controlling this joystick
         name: 'car',
         x: {
             value: 0.0,
+            default: 0.0,
             name: 'direction'
         },
         y: {
             value: 0.0,
+            default: 0.0,
             name: 'speed'
         },
         updated: false,
-        area: function(rect) { // Bounding box
+        area: function() { // Bounding box
+            var rect = canvas.getBoundingClientRect();
             return {
                 x: 30,
                 y: rect.height - 180,
                 width: 150,
                 height: 150
             };
-        }
+        },
+        isInside: isInside,
+        setValues: setValues,
+        resetValues: resetValues
     },
     {
         id: null,
         name: 'camera',
         x: {
             value: 0.0,
+            default: 0.0,
             name: 'pan'
         },
         y: {
             value: 0.7,
+            default: 0.7,
             name: 'tilt'
         },
         updated: false,
-        area: function(rect) { // Bounding box
+        area: function() { // Bounding box
+            var rect = canvas.getBoundingClientRect();
             return {
                 x: rect.width - 180,
                 y: rect.height - 180,
@@ -72,6 +106,9 @@ var controls = [
                 height: 150
             };
         },
+        isInside: isInside,
+        setValues: setValues,
+        resetValues: resetValues
     }
 ];
 
@@ -82,23 +119,6 @@ var relativeCoords = function(event, rect) {
     };
 };
 
-var isInside = function(point, area) {
-    return (
-        point.x >= area.x && point.x <= area.x + area.width
-        && point.y >= area.y && point.y <= area.y + area.height
-    );
-};
-
-var setValues = function(control, point, area) {
-    control.x.value = Math.min(1.0, Math.max(-1.0,
-        (point.x - area.x - (area.width/2)) / (area.width/2)
-    ));
-    control.y.value = Math.min(1.0, Math.max(-1.0,
-        -(point.y - area.y - (area.height/2)) / (area.height/2)
-    ));
-    control.updated = true;
-};
-
 canvas.addEventListener("touchstart", function(event) {
     var rect = canvas.getBoundingClientRect();
     for (var i=0; i<event.changedTouches.length; i++) {
@@ -106,10 +126,9 @@ canvas.addEventListener("touchstart", function(event) {
         var point = relativeCoords(touch, rect);
         for (var j=0; j<controls.length; j++) {
             var control = controls[j];
-            var area = control.area(rect);
-            if (isInside(point, area)) {
+            if (control.isInside(point)) {
                 control.identifier = touch.identifier;
-                setValues(control, point, area);
+                control.setValues(point);
             }
         }
     }
@@ -122,9 +141,7 @@ canvas.addEventListener("touchend", function(event){
             var control = controls[j];
             if (control.identifier == touch.identifier) {
                 control.identifier = null;
-                control.x.value = 0.0;
-                control.y.value = 0.0;
-                control.updated = true;
+                control.resetValues();
             }
         }
     }
@@ -137,11 +154,8 @@ canvas.addEventListener('touchmove', function(event) {
         for (var j=0; j<controls.length; j++) {
             var control = controls[j];
             if (control.identifier == touch.identifier) {
-                setValues(
-                    control,
-                    relativeCoords(touch, rect),
-                    control.area(rect)
-                );
+                var point = relativeCoords(touch, rect);
+                control.setValues(point);
             }
         }
     }
@@ -218,7 +232,6 @@ var update = function (modifier) {
         var area = control.area(canvas.getBoundingClientRect());
 
         ctx.fillStyle = "rgb(250, 250, 250, 0.75)";
-
         ctx.beginPath();
         ctx.rect(
             area.x, area.y,
@@ -226,6 +239,7 @@ var update = function (modifier) {
         );
         ctx.stroke();
 
+        ctx.fillStyle = "rgb(250, 250, 250, 0.75)";
         ctx.beginPath();
         ctx.arc(
             area.x + area.width / 2 + control.x.value * area.width / 2,
