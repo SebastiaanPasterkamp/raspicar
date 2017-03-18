@@ -5,6 +5,14 @@ canvas.width = 640;
 canvas.height = 480;
 document.body.appendChild(canvas);
 
+var camera = new Image();
+camera.read = false;
+camera.onload = function () {
+    camera.ready = true;
+};
+camera.src = "/camera";
+
+
 document.body.addEventListener('touchmove', function(event) {
     event.preventDefault();
 }, false);
@@ -20,84 +28,150 @@ function fullscreen() {
         canvas.requestFullscreen(); // standard
     }
 }
-
-touch = {
-    started: false,
-    start_x: canvas.width/2.0,
-    start_y: canvas.height/2.0,
-    x: 0,
-    y: 0
-};
-
-var car = {
-    speed: 0.0,
-    direction: 0.0,
-    updated: false
-};
-
-
 canvas.addEventListener("click",fullscreen);
 
-canvas.addEventListener("touchstart", function(event){
-    var e = event.touches[0];
-    var rect = canvas.getBoundingClientRect();
-    console.log([e.clientX - rect.left, e.clientY - rect.top]);
-    console.log(e);
-    touch.start_x = e.pageX;
-    touch.start_y = e.pageY;
+var controls = [
+    {
+        id: null, // Touch.identifier currently controlling this joystick
+        name: 'car',
+        x: {
+            value: 0.0,
+            name: 'direction'
+        },
+        y: {
+            value: 0.0,
+            name: 'speed'
+        },
+        updated: false,
+        area: function(rect) { // Bounding box
+            return {
+                x: 30,
+                y: rect.height - 180,
+                width: 150,
+                height: 150
+            };
+        }
+    },
+    {
+        id: null,
+        name: 'camera',
+        x: {
+            value: 0.0,
+            name: 'pan'
+        },
+        y: {
+            value: 0.0,
+            name: 'tilt'
+        },
+        updated: false,
+        area: function(rect) { // Bounding box
+            return {
+                x: rect.width - 180,
+                y: rect.height - 180,
+                width: 150,
+                height: 150
+            };
+        },
+    }
+];
 
-    console.log(["start", touch.start_x, '=', e.pageX]);
+var relativeCoords = function(event, rect) {
+    return {
+        x: event.pageX - rect.left,
+        y: event.pageY - rect.top
+    };
+};
+
+var isInside = function(point, area) {
+    console.log(['isInside', point.x, point.y, area.x, area.y]);
+    return (
+        point.x >= area.x && point.x <= area.x + area.width
+        && point.y >= area.y && point.y <= area.y + area.height
+    );
+};
+
+var setValues = function(control, point, area) {
+    control.x.value = Math.min(1.0, Math.max(-1.0,
+        (point.x - area.x - (area.width/2)) / (area.width/2)
+    ));
+    control.y.value = Math.min(1.0, Math.max(-1.0,
+        -(point.y - area.y - (area.height/2)) / (area.height/2)
+    ));
+    control.updated = true;
+};
+
+canvas.addEventListener("touchstart", function(event) {
+    var rect = canvas.getBoundingClientRect();
+    for (var i=0; i<event.changedTouches.length; i++) {
+        var touch = event.changedTouches[i];
+        var point = relativeCoords(touch, rect);
+        for (var j=0; j<controls.length; j++) {
+            var control = controls[j];
+            var area = control.area(rect);
+            if (isInside(point, area)) {
+                control.identifier = touch.identifier;
+                setValues(control, point, area);
+            }
+        }
+    }
 });
 
 canvas.addEventListener("touchend", function(event){
-    car.speed = 0.0;
-    car.direction = 0.0;
-    car.updated = true;
+    for (var i=0; i<event.changedTouches.length; i++) {
+        var touch = event.changedTouches[i];
+        for (var j=0; j<controls.length; j++) {
+            var control = controls[j];
+            if (control.identifier == touch.identifier) {
+                control.identifier = null;
+                control.x.value = 0.0;
+                control.y.value = 0.0;
+                control.updated = true;
+            }
+        }
+    }
 });
 
 canvas.addEventListener('touchmove', function(event) {
-    var e = event.touches[0];
-    touch.x = e.pageX;
-    touch.y = e.pageY;
-
-    console.log(["move", touch.x, '=', e.pageX, '=>', touch.start_y - touch.y]);
-
-    car.speed = Math.min(1.0, Math.max(-1.0, (touch.start_y - touch.y) / 75.0));
-    car.direction = Math.min(1.0, Math.max(-1.0, (touch.start_x - touch.x) / 75.0));
-
-    car.updated = true;
+    var rect = canvas.getBoundingClientRect();
+    for (var i=0; i<event.changedTouches.length; i++) {
+        var touch = event.changedTouches[i];
+        for (var j=0; j<controls.length; j++) {
+            var control = controls[j];
+            if (control.identifier == touch.identifier) {
+                setValues(
+                    control,
+                    relativeCoords(touch, rect),
+                    control.area(rect)
+                );
+            }
+        }
+    }
 }, false);
-
-var camera = new Image();
-camera.read = false;
-camera.onload = function () {
-    camera.ready = true;
-};
-camera.src = "/camera";
 
 // Handle keyboard controls
 var keysDown = {};
 
 var keycontrol = function() {
+    var control = controls[0];
     if (38 in keysDown) { // Holding up
-        car.updated = car.updated || (car.speed != 1.0);
-        car.speed = 1.0;
+        control.y.value = 1.0;
+        control.updated = true;
     } else if (40 in keysDown) { // Holding down
-        car.updated = car.updated || (car.speed != -1.0);
-        car.speed = -1.0;
+        control.y.value = -1.0;
+        control.updated = true;
     } else {
-        car.updated = car.updated || (car.speed != 0.0);
-        car.speed = 0.0;
+        control.y.value = 0.0;
+        control.updated = true;
     }
     if (37 in keysDown) { // Holding left
-        car.updated = car.updated || (car.direction != -1.0);
-        car.direction = -1.0;
+        control.x.value = -1.0;
+        control.updated = true;
     } else if (39 in keysDown) { // Holding right
-        car.updated = car.updated || (car.direction != 1.0);
-        car.direction = 1.0;
+        control.x.value = 1.0;
+        control.updated = true;
     } else {
-        car.updated = car.updated || (car.direction != 0.0);
-        car.direction = 0.0;
+        control.x.value = 0.0;
+        control.updated = true;
     }
 };
 
@@ -112,16 +186,25 @@ addEventListener("keyup", function (e) {
 }, false);
 
 setInterval(function() {
-    if (car.updated) {
-        console.log(car);
+    var updates = {};
+    for (var i=0; i<controls.length; i++) {
+        var control = controls[i];
+        if (control.updated) {
+            updates[control.name] = {};
+            updates[control.name][control.x.name] = control.x.value;
+            updates[control.name][control.y.name] = control.y.value;
+            control.updated = false;
+        }
+    }
+    if (updates.length) {
+        console.log(updates);
         $.ajax({
             type: 'POST',
             url: '/control',
-            data: JSON.stringify(car),
+            data: JSON.stringify(updates),
             contentType: "application/json",
             dataType: 'json'
         });
-        car.updated = false;
     }
 }, 250);
 
@@ -130,31 +213,35 @@ var update = function (modifier) {
         ctx.drawImage(camera, 0, 0);
     }
 
-    var rect = canvas.getBoundingClientRect();
+    for (var i=0; i<controls.length; i++) {
+        var control = controls[i];
+        var area = control.area(canvas.getBoundingClientRect());
 
-    ctx.beginPath();
-    ctx.rect(
-        30, rect.height - 180,
-        150, 150
-    );
-    ctx.stroke();
+        ctx.fillStyle = "rgb(250, 250, 250, 0.75)";
 
-    ctx.beginPath();
-    ctx.arc(
-        105 - car.direction * 75, rect.height - 105 - car.speed * 75,
-        10,
-        0, 2*Math.PI
-    );
-    ctx.stroke();
+        ctx.beginPath();
+        ctx.rect(
+            area.x, area.y,
+            area.width, area.height
+        );
+        ctx.stroke();
 
+        ctx.beginPath();
+        ctx.arc(
+            area.x + area.width / 2 + control.x.value * area.width / 2,
+            area.y + area.height / 2 - control.y.value * area.height / 2,
+            10,
+            0, 2*Math.PI
+        );
+        ctx.fill();
 
-
-    ctx.fillStyle = "rgb(250, 250, 250)";
-    ctx.font = "24px Helvetica";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText("Speed: " + car.speed, 32, 32);
-    ctx.fillText("Direction: " + car.direction, 32, 64);
+        ctx.fillStyle = "rgb(250, 250, 250)";
+        ctx.font = "24px Helvetica";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(control.x.name + ": " + control.x.value.toFixed(2), 32, 32 + i*64);
+        ctx.fillText(control.y.name + ": " + control.y.value.toFixed(2), 32, 64 + i*64);
+    }
 }
 
 var main = function () {
