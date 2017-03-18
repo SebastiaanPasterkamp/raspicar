@@ -20,8 +20,18 @@ import cv
 import time
 import json
 
-import RPi.GPIO as GPIO
-from sunfounder.PCA9685 import PWM
+try:
+    import RPi.GPIO as GPIO
+    from sunfounder.PCA9685 import PWM
+except:
+    import os
+    sys.path.insert(0, os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..'
+        )))
+
+    from test.mockobjects import MockGPIO, MockPWM as PWM
+    GPIO = MockGPIO()
+
 from modules.vehicle import Car
 
 capture = cv.CaptureFromCAM(-1)
@@ -69,6 +79,7 @@ class CarControl(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == '/control':
+            self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
             print data_string
             data = json.loads(data_string)
