@@ -16,7 +16,8 @@ except:
         os.path.dirname(__file__), '..'
         )))
 
-    from test.mockobjects import MockGPIO as GPIO, MockPWM as PWM
+    from test.mockobjects import MockGPIO, MockPWM as PWM
+    GPIO = MockGPIO()
 
 
 class Car(object):
@@ -232,8 +233,7 @@ class Car(object):
 
 
 if __name__ == '__main__':
-    gpio = GPIO()
-    gpio.setmode(gpio.BOARD)    # Number GPIOs by its physical location
+    GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
     pwm = PWM()                 # The servo controller.
     pwm.frequency = 60
 
@@ -246,7 +246,7 @@ if __name__ == '__main__':
         with open(config_file, 'r') as config_json:
             config = json.load(config_json)
 
-    car = Car(pwm, gpio, config=config, debug=True)
+    car = Car(pwm, GPIO, config=config, debug=True)
     car.start()
 
     car.setPanTilt(0.0, 0.0)
