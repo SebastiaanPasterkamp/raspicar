@@ -80,11 +80,13 @@ class CarControl(SimpleHTTPRequestHandler):
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
-            print data_string
             data = json.loads(data_string)
 
-            car.setSpeed(data['speed'])
-            car.setDirection(data['direction'])
+            if 'car' in data:
+                car.setSpeed(data['car']['speed'])
+                car.setDirection(data['car']['direction'])
+            if 'camera' in data:
+                car.setPanTilt(data['camera']['pan'], data['camera']['tilt'])
 
 
 if __name__ == "__main__":
