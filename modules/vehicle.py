@@ -220,7 +220,7 @@ class Car(object):
         for pan_ctrl in self.pan_controller:
             self.pwm.write(
                 pan_ctrl, 0,
-                int(self.pan_default + pan * self.pan_max)
+                int(self.pan_default - pan * self.pan_max)
                 )
         for tilt_ctrl in self.tilt_controller:
             self.pwm.write(
