@@ -33,9 +33,15 @@ except:
     GPIO = MockGPIO()
 
 from modules.vehicle import Car
+from modules.camera import VisualOdometry
 
 capture = cv.CaptureFromCAM(-1)
-cameraQuality=75
+cameraQuality=55
+
+odometry = VisualOdometry(
+    cv.QueryFrame(capture),
+    100, 150
+    )
 
 config = {}
 config_file = os.path.abspath(os.path.join(
@@ -62,6 +68,17 @@ class CarControl(SimpleHTTPRequestHandler):
             while running:
 		try:
                     img = cv.QueryFrame(capture)
+                    odometry.followFeatures(img)
+
+                    for feature in odometry.features:
+                        cv.Circle(
+                            img,
+                            (int(feature[0]), int(feature[1])),
+                            2,
+                            (0, 0, 255),
+                            -1, 8, 0
+                            )
+
                     cv2mat=cv.EncodeImage(".jpeg",img,(cv.CV_IMWRITE_JPEG_QUALITY,cameraQuality))
                     JpegData=cv2mat.tostring()
                     self.wfile.write("--aaboundary\r\n")
