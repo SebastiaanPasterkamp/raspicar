@@ -193,7 +193,7 @@ class Car(object):
         for direction_ctrl in self.steering_controller:
             self.pwm.write(
                 direction_ctrl, 0,
-                int(self.rotation_default - rotation * self.rotation_max)
+                int(self.rotation_default + rotation * self.rotation_max)
                 )
 
         self.rotation = rotation
