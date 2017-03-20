@@ -98,6 +98,9 @@ if __name__ == '__main__':
                 )
 
         cv.ShowImage('capture', img)
-
+        c = cv.WaitKey(1)
+        if (c % 256) == 27:
+            # ESC pressed
+            break
 
     del(capture)
