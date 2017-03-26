@@ -12,7 +12,7 @@ camera.onload = function () {
 };
 camera.src = "/camera";
 
-var calibrate = false;
+var capture = false;
 
 document.body.addEventListener('touchmove', function(event) {
     event.preventDefault();
@@ -194,11 +194,11 @@ addEventListener("keydown", function (e) {
     keycontrol();
 
     if (e.keyCode == 67) {
-        calibrate = ! calibrate;
+        capture = ! capture;
         $.ajax({
             type: 'POST',
             url: '/control',
-            data: JSON.stringify({'calibrate': calibrate}),
+            data: JSON.stringify({'capture': capture}),
             contentType: "application/json",
             dataType: 'json'
         });
