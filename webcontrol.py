@@ -86,7 +86,7 @@ class CarControl(SimpleHTTPRequestHandler):
                             filename = os.path.abspath(os.path.join(
                                 os.path.dirname(__file__),
                                 '..',
-                                'calibration',
+                                'capture',
                                 ts.strftime('capture.%Y%m%d-%H%M%s.jpg')
                                 ))
                             print "Write to:", filename
@@ -132,8 +132,8 @@ class CarControl(SimpleHTTPRequestHandler):
                 capture = bool(data['capture'])
                 target_dir = os.path.abspath(os.path.join(
                     os.path.dirname(__file__),
-                    'calibration',
-                    ''
+                    '..',
+                    'capture'
                     ))
                 if not os.path.isdir(target_dir):
                     os.mkdir(target_dir)
