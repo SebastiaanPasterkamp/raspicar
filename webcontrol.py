@@ -18,6 +18,7 @@ import sys
 import os
 import cv
 import time
+from datetime import datetime
 import json
 
 try:
@@ -35,11 +36,11 @@ except:
 from modules.vehicle import Car
 from modules.camera import VisualOdometry
 
-capture = cv.CaptureFromCAM(-1)
+camera = cv.CaptureFromCAM(-1)
 cameraQuality=55
 
 odometry = VisualOdometry(
-    cv.QueryFrame(capture),
+    cv.QueryFrame(camera),
     100, 150
     )
 
@@ -58,8 +59,15 @@ car = Car(pwm, GPIO, config=config, debug=True)
 car.start()
 
 running = True
+capture = False
+last_snapshot = time.time()
 class CarControl(SimpleHTTPRequestHandler):
+    def shutdown(self):
+        super(CarControl, self).shutdown()
+
     def do_GET(self):
+        global running, capture, last_snapshot
+
         if self.path == '/camera':
             self.send_response(200)
             self.wfile.write("Content-Type: multipart/x-mixed-replace; boundary=--aaboundary")
@@ -67,8 +75,22 @@ class CarControl(SimpleHTTPRequestHandler):
 
             while running:
 		try:
-                    img = cv.QueryFrame(capture)
+                    img = cv.QueryFrame(camera)
                     odometry.followFeatures(img)
+
+                    if capture:
+                        if last_snapshot <= time.time():
+                            last_snapshot = time.time() + 3.0
+                            print last_snapshot, time.time()
+                            ts = datetime.now()
+                            filename = os.path.abspath(os.path.join(
+                                os.path.dirname(__file__),
+                                '..',
+                                'calibration',
+                                ts.strftime('capture.%Y%m%d-%H%M%s.jpg')
+                                ))
+                            print "Write to:", filename
+                            cv.SaveImage(filename, img)
 
                     for feature in odometry.features:
                         cv.Circle(
@@ -87,13 +109,15 @@ class CarControl(SimpleHTTPRequestHandler):
                     self.wfile.write(JpegData)
                     self.wfile.write("\r\n\r\n\r\n")
                     time.sleep(0.05)
-                except:
-                    pass
+                except Exception as e:
+                    print "Done streaming", e
+                    break
             return
         else:
             return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
+        global capture
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
@@ -104,6 +128,15 @@ class CarControl(SimpleHTTPRequestHandler):
                 car.setDirection(data['car']['direction'])
             if 'camera' in data:
                 car.setPanTilt(data['camera']['pan'], data['camera']['tilt'])
+            if 'capture' in data:
+                capture = bool(data['capture'])
+                target_dir = os.path.abspath(os.path.join(
+                    os.path.dirname(__file__),
+                    'calibration',
+                    ''
+                    ))
+                if not os.path.isdir(target_dir):
+                    os.mkdir(target_dir)
 
 
 if __name__ == "__main__":
@@ -119,7 +152,7 @@ if __name__ == "__main__":
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        del(capture)
         running = False
+        del(camera)
         server.shutdown()
         print("Finished")
