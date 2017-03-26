@@ -12,6 +12,7 @@ camera.onload = function () {
 };
 camera.src = "/camera";
 
+var calibrate = false;
 
 document.body.addEventListener('touchmove', function(event) {
     event.preventDefault();
@@ -191,7 +192,18 @@ var keycontrol = function() {
 addEventListener("keydown", function (e) {
     keysDown[e.keyCode] = true;
     keycontrol();
-}, false);
+
+    if (e.keyCode == 67) {
+        calibrate = ! calibrate;
+        $.ajax({
+            type: 'POST',
+            url: '/control',
+            data: JSON.stringify({'calibrate': calibrate}),
+            contentType: "application/json",
+            dataType: 'json'
+        });
+    }
+});
 
 addEventListener("keyup", function (e) {
     delete keysDown[e.keyCode];
