@@ -2,7 +2,7 @@
 
 import sys
 import os
-import cv
+import cv2
 import time
 import json
 
@@ -34,21 +34,15 @@ pwm.frequency = 60
 car = Car(pwm, GPIO, config=config, debug=True)
 car.start()
 
-def getFrame(filename):
-    capture = cv.CaptureFromCAM(-1)
-    cv.SetCaptureProperty(capture,cv.CV_CAP_PROP_FRAME_WIDTH, 640)
-    cv.SetCaptureProperty(capture,cv.CV_CAP_PROP_FRAME_HEIGHT, 480);
-    img = cv.QueryFrame(capture)
-    cv.SaveImage(filename, img)
-
 if __name__ == "__main__":
-    steps = 10
+    steps = 6
     pan = (-.2,.2)
-    tilt = (.5,.7)
+    tilt = (.6,.8)
+    delay = 3.0
 
-    car.setPanTilt(pan[0], tilt[0])
-    time.sleep(1)
+    capture = cv2.VideoCapture(-1)
 
+    next_capture = time.time() + delay
     reverse=False
     for y in range(steps+1):
         for x in sorted(range(steps+1), reverse=reverse):
@@ -56,8 +50,14 @@ if __name__ == "__main__":
                 pan[0] + ((pan[1]-pan[0])*x/steps),
                 tilt[0] + ((tilt[1]-tilt[0])*y/steps)
                 )
-            time.sleep(0.75)
-            getFrame('panorama/image-%02d-%02d.png' % (y, x))
+            while True:
+                ret, img = capture.read()
+                if time.time() >= next_capture:
+                    next_capture = time.time() + delay
+                    cv2.imwrite('panorama/image-%02d-%02d.png' % (y, x), img)
+                    break
+
         reverse = not reverse
 
     car.setPanTilt(0.0, 0.7)
+    capture.release()
