@@ -87,7 +87,7 @@ class CarControl(SimpleHTTPRequestHandler):
                                 os.path.dirname(__file__),
                                 '..',
                                 'capture',
-                                ts.strftime('capture.%Y%m%d-%H%M%s.jpg')
+                                ts.strftime('capture.%Y%m%d-%H%M%s.png')
                                 ))
                             print "Write to:", filename
                             cv.SaveImage(filename, img)
