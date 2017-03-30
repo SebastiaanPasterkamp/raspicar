@@ -16,7 +16,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 
 import sys
 import os
-import cv
+import cv2
 import time
 from datetime import datetime
 import json
@@ -25,7 +25,6 @@ try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
 except:
-    import os
     sys.path.insert(0, os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..'
         )))
@@ -36,11 +35,12 @@ except:
 from modules.vehicle import Car
 from modules.camera import VisualOdometry
 
-camera = cv.CaptureFromCAM(-1)
+camera = cv2.VideoCapture(-1)
 cameraQuality=55
 
+ret, img = camera.read()
 odometry = VisualOdometry(
-    cv.QueryFrame(camera),
+    img,
     100, 150
     )
 
@@ -70,18 +70,17 @@ class CarControl(SimpleHTTPRequestHandler):
 
         if self.path == '/camera':
             self.send_response(200)
-            self.wfile.write("Content-Type: multipart/x-mixed-replace; boundary=--aaboundary")
-            self.wfile.write("\r\n\r\n")
+            self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
+            self.end_headers()
 
             while running:
 		try:
-                    img = cv.QueryFrame(camera)
+                    ret, img = camera.read()
                     odometry.followFeatures(img)
 
                     if capture:
                         if last_snapshot <= time.time():
                             last_snapshot = time.time() + 3.0
-                            print last_snapshot, time.time()
                             ts = datetime.now()
                             filename = os.path.abspath(os.path.join(
                                 os.path.dirname(__file__),
@@ -89,11 +88,10 @@ class CarControl(SimpleHTTPRequestHandler):
                                 'capture',
                                 ts.strftime('capture.%Y%m%d-%H%M%s.png')
                                 ))
-                            print "Write to:", filename
-                            cv.SaveImage(filename, img)
+                            cv2.imwrite(filename, img)
 
                     for feature in odometry.features:
-                        cv.Circle(
+                        cv2.circle(
                             img,
                             (int(feature[0]), int(feature[1])),
                             2,
@@ -101,13 +99,14 @@ class CarControl(SimpleHTTPRequestHandler):
                             -1, 8, 0
                             )
 
-                    cv2mat=cv.EncodeImage(".jpeg",img,(cv.CV_IMWRITE_JPEG_QUALITY,cameraQuality))
-                    JpegData=cv2mat.tostring()
-                    self.wfile.write("--aaboundary\r\n")
-                    self.wfile.write("Content-Type: image/jpeg\r\n")
-                    self.wfile.write("Content-length: "+str(len(JpegData))+"\r\n\r\n" )
-                    self.wfile.write(JpegData)
-                    self.wfile.write("\r\n\r\n\r\n")
+                    r, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, cameraQuality])
+                    self.wfile.write("--jpgboundary\r\n")
+                    self.send_header('Content-type', 'image/jpeg')
+                    self.send_header('Content-length', str(len(buf)))
+                    print "Size: %d" % len(buf)
+                    self.end_headers()
+                    self.wfile.write(bytearray(buf))
+                    self.wfile.write('\r\n')
                     time.sleep(0.05)
                 except Exception as e:
                     print "Done streaming", e
