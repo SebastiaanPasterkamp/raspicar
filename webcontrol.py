@@ -36,7 +36,14 @@ from modules.vehicle import Car
 from modules.camera import VisualOdometry
 
 camera = cv2.VideoCapture(-1)
-cameraQuality=55
+camera_quality = 55
+camera_params = (
+    int(camera.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),
+    int(camera.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)),
+    int(camera.get(cv2.cv.CV_CAP_PROP_FPS))
+        if camera.get(cv2.cv.CV_CAP_PROP_FPS) > 0.0
+        else 15
+    )
 
 ret, img = camera.read()
 odometry = VisualOdometry(
@@ -61,12 +68,14 @@ car.start()
 running = True
 capture = False
 last_snapshot = time.time()
+record = False
+video_writer = None
 class CarControl(SimpleHTTPRequestHandler):
     def shutdown(self):
         super(CarControl, self).shutdown()
 
     def do_GET(self):
-        global running, capture, last_snapshot
+        global running, capture, last_snapshot, record, video_writer
 
         if self.path == '/camera':
             self.send_response(200)
@@ -90,6 +99,10 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ))
                             cv2.imwrite(filename, img)
 
+                    if record:
+                        print 'recording...'
+                        video_writer.write(img)
+
                     for feature in odometry.features:
                         cv2.circle(
                             img,
@@ -99,11 +112,10 @@ class CarControl(SimpleHTTPRequestHandler):
                             -1, 8, 0
                             )
 
-                    r, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, cameraQuality])
+                    r, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, camera_quality])
                     self.wfile.write("--jpgboundary\r\n")
                     self.send_header('Content-type', 'image/jpeg')
                     self.send_header('Content-length', str(len(buf)))
-                    print "Size: %d" % len(buf)
                     self.end_headers()
                     self.wfile.write(bytearray(buf))
                     self.wfile.write('\r\n')
@@ -116,7 +128,7 @@ class CarControl(SimpleHTTPRequestHandler):
             return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
-        global capture
+        global capture, record, video_writer
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
@@ -125,8 +137,10 @@ class CarControl(SimpleHTTPRequestHandler):
             if 'car' in data:
                 car.setSpeed(data['car']['speed'])
                 car.setDirection(data['car']['direction'])
+
             if 'camera' in data:
                 car.setPanTilt(data['camera']['pan'], data['camera']['tilt'])
+
             if 'capture' in data:
                 capture = bool(data['capture'])
                 target_dir = os.path.abspath(os.path.join(
@@ -137,6 +151,40 @@ class CarControl(SimpleHTTPRequestHandler):
                 if not os.path.isdir(target_dir):
                     os.mkdir(target_dir)
 
+            if 'record' in data:
+                record = bool(data['record'])
+                if record:
+                    target_dir = os.path.abspath(os.path.join(
+                        os.path.dirname(__file__),
+                        '..',
+                        'record'
+                        ))
+                    if not os.path.isdir(target_dir):
+                        os.mkdir(target_dir)
+                    ts = datetime.now()
+                    filename = os.path.abspath(os.path.join(
+                        os.path.dirname(__file__),
+                        '..',
+                        'record',
+                        ts.strftime('video.%Y%m%d-%H%M%s.avi')
+                        ))
+                    # Define the codec and create VideoWriter object
+                    fourcc = None
+                    if callable(cv2.cv.CV_FOURCC):
+                        fourcc = cv2.cv.CV_FOURCC(*'XVID')
+                    else:
+                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                    video_writer = cv2.VideoWriter(
+                        filename, fourcc,
+                        camera_params[2], # fps
+                        camera_params[:2] # width, height
+                        )
+                    print "recording to '%s', %rx%r @%r: %r" % (
+                        filename, camera_params[0], camera_params[1],
+                        camera_params[2], video_writer)
+                else:
+                    video_writer.release()
+                    video_writer = None
 
 if __name__ == "__main__":
 

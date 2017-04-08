@@ -13,6 +13,7 @@ camera.onload = function () {
 camera.src = "/camera";
 
 var capture = false;
+var record = false;
 
 document.body.addEventListener('touchmove', function(event) {
     event.preventDefault();
@@ -199,6 +200,17 @@ addEventListener("keydown", function (e) {
             type: 'POST',
             url: '/control',
             data: JSON.stringify({'capture': capture}),
+            contentType: "application/json",
+            dataType: 'json'
+        });
+    }
+
+    if (e.keyCode == 82) {
+        record = ! record;
+        $.ajax({
+            type: 'POST',
+            url: '/control',
+            data: JSON.stringify({'record': record}),
             contentType: "application/json",
             dataType: 'json'
         });
