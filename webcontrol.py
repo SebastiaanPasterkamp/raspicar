@@ -87,6 +87,11 @@ class CarControl(SimpleHTTPRequestHandler):
                     ret, img = camera.read()
                     odometry.followFeatures(img)
 
+                    if record:
+                        print 'recording...'
+                        video_writer.write(img)
+                        continue
+
                     if capture:
                         if last_snapshot <= time.time():
                             last_snapshot = time.time() + 3.0
@@ -98,10 +103,6 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ts.strftime('capture.%Y%m%d-%H%M%s.png')
                                 ))
                             cv2.imwrite(filename, img)
-
-                    if record:
-                        print 'recording...'
-                        video_writer.write(img)
 
                     for feature in odometry.features:
                         cv2.circle(
