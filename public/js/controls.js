@@ -41,20 +41,56 @@ var isInside = function(point) {
 };
 
 var setValues = function(point) {
-    var area = this.area();
-    this.x.value = Math.min(1.0, Math.max(-1.0,
-        (point.x - area.x - (area.width/2)) / (area.width/2)
-    ));
-    this.y.value = Math.min(1.0, Math.max(-1.0,
-        -(point.y - area.y - (area.height/2)) / (area.height/2)
-    ));
-    this.updated = true;
+    var area = this.area(),
+        x = Math.min(1.0, Math.max(-1.0,
+            (point.x - area.x - (area.width/2)) / (area.width/2)
+        )),
+        y  = Math.min(1.0, Math.max(-1.0,
+            -(point.y - area.y - (area.height/2)) / (area.height/2)
+        ));
+    if (this.relative) {
+        this.x.delta = x;
+        this.y.delta = y;
+    }
+    else {
+        this.x.value = x;
+        this.y.value = y;
+        this.updated = true;
+    }
 };
 
 var resetValues = function() {
     this.x.value = this.x.default;
     this.y.value = this.y.default;
-    this.updated = true;
+    if (this.relative) {
+        this.x.delta = 0.0;
+        this.y.delta = 0.0;
+    } else {
+        this.updated = true;
+    }
+};
+
+var updateValues = function() {
+    if (this.relative) {
+        var x = Math.min(
+                1.0,
+                Math.max(-1.0, this.x.value + this.x.delta * 0.1)
+            ),
+            y = Math.min(
+                1.0,
+                Math.max(-1.0, this.y.value + this.y.delta * 0.1)
+            ),
+            updated = false;
+        updated = this.x.value != x || this.y.value != y;
+        this.x.value = x;
+        this.y.value = y;
+        return updated;
+    }
+    else if (this.updated) {
+        this.updated = false;
+        return true;
+    }
+    return false;
 };
 
 var controls = [
@@ -71,7 +107,8 @@ var controls = [
             default: 0.0,
             name: 'speed'
         },
-        updated: false,
+        relative: false,
+        update: updateValues,
         area: function() { // Bounding box
             var rect = canvas.getBoundingClientRect();
             return {
@@ -90,15 +127,18 @@ var controls = [
         name: 'camera',
         x: {
             value: 0.0,
+            delta: 0.0,
             default: 0.0,
             name: 'pan'
         },
         y: {
             value: 0.7,
+            delta: 0.0,
             default: 0.7,
             name: 'tilt'
         },
-        updated: false,
+        relative: true,
+        update: updateValues,
         area: function() { // Bounding box
             var rect = canvas.getBoundingClientRect();
             return {
@@ -227,11 +267,10 @@ setInterval(function() {
     var updated = false;
     for (var i=0; i<controls.length; i++) {
         var control = controls[i];
-        if (control.updated) {
+        if (control.update()) {
             updates[control.name] = {};
             updates[control.name][control.x.name] = control.x.value;
             updates[control.name][control.y.name] = control.y.value;
-            control.updated = false;
             updated = true;
         }
     }
