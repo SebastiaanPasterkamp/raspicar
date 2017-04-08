@@ -74,11 +74,11 @@ var updateValues = function() {
     if (this.relative) {
         var x = Math.min(
                 1.0,
-                Math.max(-1.0, this.x.value + this.x.delta * 0.1)
+                Math.max(-1.0, this.x.value + this.x.delta * 0.025)
             ),
             y = Math.min(
                 1.0,
-                Math.max(-1.0, this.y.value + this.y.delta * 0.1)
+                Math.max(-1.0, this.y.value + this.y.delta * 0.025)
             ),
             updated = false;
         updated = this.x.value != x || this.y.value != y;
@@ -283,7 +283,7 @@ setInterval(function() {
             dataType: 'json'
         });
     }
-}, 250);
+}, 100);
 
 var update = function (modifier) {
     if (camera.ready) {
