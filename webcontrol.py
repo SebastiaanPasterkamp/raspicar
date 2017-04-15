@@ -82,13 +82,27 @@ class CarControl(SimpleHTTPRequestHandler):
             self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
             self.end_headers()
 
+            fps = {
+                'time': time.time(),
+                'total': 0.0,
+                'count': 0
+                }
             while running:
 		try:
+                    fps['total'] += time.time() - fps['time']
+                    fps['time'] = time.time()
+                    fps['count'] += 1
+                    if fps['count'] > 100:
+                        print "fps: %.2f" % (
+                            1.0 / (fps['total'] / fps['count'])
+                            )
+                        fps['total'] = 0.0
+                        fps['count'] = 0
+
                     ret, img = camera.read()
                     odometry.followFeatures(img)
 
                     if record:
-                        print 'recording...'
                         video_writer.write(img)
                         continue
 
@@ -100,7 +114,7 @@ class CarControl(SimpleHTTPRequestHandler):
                                 os.path.dirname(__file__),
                                 '..',
                                 'capture',
-                                ts.strftime('capture.%Y%m%d-%H%M%s.png')
+                                ts.strftime('capture.%Y%m%d-%H%M%S.png')
                                 ))
                             cv2.imwrite(filename, img)
 
@@ -120,7 +134,6 @@ class CarControl(SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(bytearray(buf))
                     self.wfile.write('\r\n')
-                    time.sleep(0.05)
                 except Exception as e:
                     print "Done streaming", e
                     break
@@ -167,14 +180,14 @@ class CarControl(SimpleHTTPRequestHandler):
                         os.path.dirname(__file__),
                         '..',
                         'record',
-                        ts.strftime('video.%Y%m%d-%H%M%s.avi')
+                        ts.strftime('video-%Y%m%d-%H%M%S.avi')
                         ))
                     # Define the codec and create VideoWriter object
                     fourcc = None
                     if callable(cv2.cv.CV_FOURCC):
-                        fourcc = cv2.cv.CV_FOURCC(*'XVID')
+                        fourcc = cv2.cv.CV_FOURCC(*'MJPG')
                     else:
-                        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
                     video_writer = cv2.VideoWriter(
                         filename, fourcc,
                         camera_params[2], # fps
@@ -183,6 +196,8 @@ class CarControl(SimpleHTTPRequestHandler):
                     print "recording to '%s', %rx%r @%r: %r" % (
                         filename, camera_params[0], camera_params[1],
                         camera_params[2], video_writer)
+                    if video_writer is None:
+                        record = False
                 else:
                     video_writer.release()
                     video_writer = None
