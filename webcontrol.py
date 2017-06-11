@@ -21,31 +21,27 @@ import time
 from datetime import datetime
 import json
 
+sys.path.insert(0, os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..'
+    )))
+
+usePiCamera=False
 try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
+    usePiCamera = True
 except:
-    sys.path.insert(0, os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..'
-        )))
-
     from test.mockobjects import MockGPIO, MockPWM as PWM
     GPIO = MockGPIO()
 
 from modules.vehicle import Car
-from modules.camera import VisualOdometry
+from modules.camera import VideoCamera, VisualOdometry
 
-camera = cv2.VideoCapture(-1)
+camera = VideoCamera(
+    -1, usePiCamera=usePiCamera, resolution=(1280, 720)).start()
 camera_quality = 55
-camera_params = (
-    int(camera.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),
-    int(camera.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)),
-    int(camera.get(cv2.cv.CV_CAP_PROP_FPS))
-        if camera.get(cv2.cv.CV_CAP_PROP_FPS) > 0.0
-        else 15
-    )
 
-ret, img = camera.read()
+img = camera.read()
 odometry = VisualOdometry(
     img,
     100, 150
@@ -99,7 +95,7 @@ class CarControl(SimpleHTTPRequestHandler):
                         fps['total'] = 0.0
                         fps['count'] = 0
 
-                    ret, img = camera.read()
+                    img = camera.read()
                     odometry.followFeatures(img)
 
                     if record:
@@ -190,12 +186,13 @@ class CarControl(SimpleHTTPRequestHandler):
                         fourcc = cv2.VideoWriter_fourcc(*'MJPG')
                     video_writer = cv2.VideoWriter(
                         filename, fourcc,
-                        camera_params[2], # fps
-                        camera_params[:2] # width, height
+                        camera.framerate, # fps
+                        camera.resolution # width, height
                         )
                     print "recording to '%s', %rx%r @%r: %r" % (
-                        filename, camera_params[0], camera_params[1],
-                        camera_params[2], video_writer)
+                        filename, camera.framerate,
+                        camera.resolution[0], camera.resolution[1],
+                        video_writer)
                     if video_writer is None:
                         record = False
                 else:
@@ -203,7 +200,6 @@ class CarControl(SimpleHTTPRequestHandler):
                     video_writer = None
 
 if __name__ == "__main__":
-
     port = 8000
     public_dir = os.path.abspath(os.path.join(
         os.path.dirname(__file__), 'public'
@@ -216,6 +212,6 @@ if __name__ == "__main__":
         server.serve_forever()
     except KeyboardInterrupt:
         running = False
-        del(camera)
+        camera.stop()
         server.shutdown()
         print("Finished")

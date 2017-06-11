@@ -6,19 +6,21 @@ import cv2
 import time
 import json
 
+sys.path.insert(0, os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..'
+    )))
+
+usePiCamera=False
 try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
+    usePiCamera = True
 except:
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join(
-        os.path.dirname(__file__), '..'
-        )))
-
     from test.mockobjects import MockGPIO, MockPWM as PWM
     GPIO = MockGPIO()
 
 from modules.vehicle import Car
+from modules.camera import VideoCamera
 
 config = {}
 config_file = os.path.abspath(os.path.join(
@@ -40,7 +42,8 @@ if __name__ == "__main__":
     tilt = (.6,.8)
     delay = 3.0
 
-    capture = cv2.VideoCapture(-1)
+    camera = VideoCamera(
+        -1, usePiCamera=usePiCamera, resolution=(1280, 720)).start()
 
     next_capture = time.time() + delay
     reverse=False
@@ -51,7 +54,7 @@ if __name__ == "__main__":
                 tilt[0] + ((tilt[1]-tilt[0])*y/steps)
                 )
             while True:
-                ret, img = capture.read()
+                img = camera.read()
                 if time.time() >= next_capture:
                     next_capture = time.time() + delay
                     cv2.imwrite('panorama/image-%02d-%02d.png' % (y, x), img)
@@ -60,4 +63,4 @@ if __name__ == "__main__":
         reverse = not reverse
 
     car.setPanTilt(0.0, 0.7)
-    capture.release()
+    camera.stop()
