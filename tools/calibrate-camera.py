@@ -31,6 +31,7 @@ else:
     print "No images found matching '%s'" % file_pattern
     sys.exit(1)
 
+threshold = 10
 size = (27.65, 39.51)
 grid = (4, 11)
 # prepare object points
@@ -55,18 +56,20 @@ for fname in images:
     status, corners = cv2.findCirclesGrid(
         gray,
         grid,
-        flags=cv2.CALIB_CB_ASYMMETRIC_GRID + cv2.CALIB_CB_CLUSTERING
+        flags=cv2.CALIB_CB_ASYMMETRIC_GRID
         )
 
     # If found, add object points, image points (after refining them)
     if status == True:
         objpoints.append(objp)
         imgpoints.append(corners)
+        print "Pattern found in '%s'" % fname
     else:
         print "No pattern found in '%s'" % fname
 
-if len(imgpoints) < 10:
-    print "Not enough usable examples found."
+if len(imgpoints) < threshold:
+    print "Not enough usable examples found. Need %d, only found %d" % (
+        threshold, len(imgpoints))
     sys.exit(1)
 
 print "Calibrating based on %d samples" % len(imgpoints)
