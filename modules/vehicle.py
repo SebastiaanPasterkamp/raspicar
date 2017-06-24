@@ -5,7 +5,8 @@ vehicles"""
 import sys
 import json
 import time
-
+import math
+from threading import Thread
 
 try:
     import RPi.GPIO as GPIO
@@ -26,6 +27,9 @@ class Car(object):
     - motors for motion
     - servo for steering
     - pan/tilt camera
+
+    Once start() is called, it will estimate it's position over time
+    using Dead reckoning.
     """
 
     def __init__(self, pwm, GPIO, config={}, debug=False):
@@ -33,12 +37,24 @@ class Car(object):
 
         pwm = Sunfounder's PWM servo controller instance
 
-        config options:
-        - flip_direction :  list of motors who's direction is flipped
-        - speed_max:        max speed for motor PWM controllers
-        - rotation_max :    max PWM for steering servo; maximum steering arc
-        - rotation_offset : change in default PWM for steering servo
-                            0.0 for 'home' or straight
+        Config options:
+            Vehicle control:
+
+        - flip_direction :      list of motors who's direction is flipped
+        - max_speed :           max speed for motor PWM controllers
+        - max_rotation :        max PWM for steering servo; maximum
+                                steering arc
+        - rotation_offset :     change in default PWM for steering servo
+                                0.0 for 'home' or straight
+
+            Dead reckoning parameters:
+        - speed_max_rpm:        the rpm of the motor when PWM is set to
+                                speed_max
+        - rotation_max_angle:   the steering angle when the wheel
+                                rotation is set to rotation_max
+        - vehicle_length        distance between the front wheel axle
+                                and rear wheel axle
+        - wheel_diameter        the diameter of the wheels
         """
         self.pwm = pwm
         self.GPIO = GPIO
@@ -48,6 +64,7 @@ class Car(object):
         motor = config.get('motor', {})
         steering = config.get('steering', {})
         camera = config.get('camera', {})
+        car = config.get('car', {})
 
         # Motor PWM pins
         self.motor_speed_controller = motor.get('pwm_speed_ctrl', [
@@ -75,7 +92,7 @@ class Car(object):
             ])
         self.rotation_max = steering.get('max_rotation', 75.0)
         # Default servo position for straight forward
-        self.rotation_default = steering.get('default', 450.0)
+        self.rotation_default = steering.get('rotation_offset', 450.0)
         self.rotation = 0.0
 
         # Pan/Tilt PWM pins
@@ -110,6 +127,14 @@ class Car(object):
         # List of all GPIO pins in use
         self.pins = self.forward + self.backwards
 
+        # Set car's physical properties
+        self.speed_rpm = car.get('max_speed_rpm', 0.5)
+        self.rotation_max_angle = (
+                2.0 * math.pi * car.get('max_rotation_angle', 45.0)
+                ) / 360.0
+        self.vehicle_length = car.get('vehicle_length', 20)
+        self.wheel_circumference = car.get('wheel_diameter', 5.0) * math.pi
+
     def start(self):
         self._log("Setting up pins for output: %r" % self.pins)
         # Set all pins' mode as output
@@ -119,11 +144,85 @@ class Car(object):
         self.setPanTilt(self.pan_home, self.tilt_home)
         self.setDirection(0.0)
 
+        """ start the thread to update position over time """
+        self.running = True
+        Thread(target=self.update, args=()).start()
+        return self
+
     def _log(self, message):
         if self.debug:
             sys.stderr.write(message + "\n")
 
+    def update(self):
+        """ Dead Reckoning formula:
+        if Steering ~ 0:
+            # straight line
+            Position x += cos(Orientation) * Velocity * Time
+            Position y += sin(Orientation) * Velocity * Time
+        else:
+            Turn = tan(Steering) * (Velocity * Time) / Vehicle length
+            Radius = (Velocity * Time) / Turn
+            Position x -= sin(Orientation) * Radius
+            Position y += cos(Orientation) * Radius
+            Orientation = (Orientation + Turn) % 2pi
+            Position x += sin(Orientation) * Radius
+            Position y -= cos(Orientation) * Radius
+        """
+        self.dead_reckoning = {
+            'T': time.time(),
+            'P': [0., 0.], # Position
+            'O': 0.0 # Orientation
+            }
+        time.sleep(0.25)
+        radian = math.pi * 2.0
+        while self.running:
+            dr = self.dead_reckoning
+            delta_T = time.time() - dr['T']
+
+            distance = self.speed * self.speed_rpm \
+                * self.wheel_circumference * delta_T
+            turn = math.tan(self.rotation * self.rotation_max_angle) \
+                * distance / self.vehicle_length
+
+            update = {
+                'T': dr['T'] + delta_T,
+                'P': dr['P'],
+                'O': dr['O']
+                }
+            if abs(turn) <= 0.0001:
+                update['P'] = [
+                    dr['P'][0] + math.cos(dr['O']) * distance,
+                    dr['P'][1] + math.sin(dr['O']) * distance
+                    ]
+                update['O'] = (dr['O'] + turn) % radian
+            else:
+                radius = distance / turn
+                update['P'] = [
+                    dr['P'][0] - math.sin(dr['O']) * radius,
+                    dr['P'][1] + math.cos(dr['O']) * radius
+                    ]
+                update['O'] = (dr['O'] + turn) % radian
+                update['P'] = [
+                    update['P'][0] + math.sin(update['O']) * radius,
+                    update['P'][1] - math.cos(update['O']) * radius
+                    ]
+            self.dead_reckoning = update
+            time.sleep(0.25)
+
+    def getPosition(self, old_P=None):
+        """ Get the current position. If a prior position P is provided,
+        return a delta position
+        """
+        P = self.dead_reckoning['P']
+        if old_P is not None:
+            return [
+                P[0] - old_P[0],
+                P[1] - old_P[1]
+                ]
+        return P
+
     def stop(self):
+        self.running = False
         self.setSpeed(0.0)
         self.setDirection(0.0)
         self._log("Releasing GPIO pins: %r" % self.pins)
