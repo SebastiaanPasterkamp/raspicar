@@ -17,6 +17,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 import sys
 import os
 import cv2
+import numpy as np
 import time
 from datetime import datetime
 import json
@@ -61,7 +62,7 @@ GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
 pwm = PWM()                 # The servo controller.
 pwm.frequency = 60
 
-car = Car(pwm, GPIO, config=config, debug=True)
+car = Car(pwm, GPIO, config=config)
 car.start()
 
 running = True
@@ -80,24 +81,10 @@ class CarControl(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
             self.end_headers()
-
-            fps = {
-                'time': time.time(),
-                'total': 0.0,
-                'count': 0
-                }
+            position = car.getPosition()
+            path = []
             while running:
-		try:
-                    fps['total'] += time.time() - fps['time']
-                    fps['time'] = time.time()
-                    fps['count'] += 1
-                    if fps['count'] > 100:
-                        print "fps: %.2f" % (
-                            1.0 / (fps['total'] / fps['count'])
-                            )
-                        fps['total'] = 0.0
-                        fps['count'] = 0
-
+                try:
                     img = camera.read()
                     odometry.followFeatures(img)
 
@@ -117,6 +104,23 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ))
                             cv2.imwrite(filename, img)
                             print "Captured", filename
+
+                    delta = car.getPosition(position)
+                    if np.linalg.norm(delta) > 1.0:
+                        position = car.getPosition()
+                        path.append([
+                            camera.resolution[0] * 0.5 + position[0],
+                            camera.resolution[1] * 0.5 + position[1]
+                            ])
+                    if len(path) > 1:
+                        cv2.polylines(
+                            img,
+                            #path,
+                            [np.array(path, np.int32)],
+                            #[np.array(path, np.int32).reshape((-1,1,2))],
+                            False,
+                            (0,255,255)
+                            )
 
                     for feature in odometry.features:
                         cv2.circle(
@@ -216,6 +220,7 @@ if __name__ == "__main__":
         server.serve_forever()
     except KeyboardInterrupt:
         running = False
+        car.stop()
         camera.stop()
         server.shutdown()
         print("Finished")
