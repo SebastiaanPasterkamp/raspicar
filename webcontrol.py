@@ -109,8 +109,8 @@ class CarControl(SimpleHTTPRequestHandler):
                     if np.linalg.norm(delta) > 1.0:
                         position = car.getPosition()
                         path.append([
-                            camera.resolution[0] * 0.5 + position[0],
-                            camera.resolution[1] * 0.5 + position[1]
+                            camera.resolution[0] * 0.5 + position[0] * 0.1,
+                            camera.resolution[1] * 0.5 + position[1] * 0.1
                             ])
                     if len(path) > 1:
                         cv2.polylines(
