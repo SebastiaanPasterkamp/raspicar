@@ -150,6 +150,7 @@ class Car(object):
 
         """ start the thread to update position over time """
         self.running = True
+        self.path = []
         Thread(target=self.update, args=()).start()
         return self
 
@@ -179,6 +180,7 @@ class Car(object):
         last_time = time.time()
         clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
         time.sleep(0.01)
+        last_position = self.getPosition()
         while self.running:
             last_time, delta_time = time.time(), time.time() - last_time
 
@@ -187,11 +189,16 @@ class Car(object):
                 delta_time
                 )
 
+            delta = self.getPosition(last_position)
+            if delta[0]**2.0 + delta[1]**2.0 > 1.0:
+                last_position = self.getPosition()
+                self.path.append(last_position)
+
             self._setSpeed(
-                self.speed + clamp(self.target_speed - self.speed, -0.5 * delta_time, 0.5 * delta_time)
+                self.speed + clamp(self.target_speed - self.speed, -1.0 * delta_time, 1.0 * delta_time)
                 )
             self._setDirection(
-                self.rotation + clamp(self.target_rotation - self.rotation, -0.5 * delta_time, 0.5 * delta_time)
+                self.rotation + clamp(self.target_rotation - self.rotation, -2.0 * delta_time, 2.0 * delta_time)
                 )
 
             time.sleep(0.01)

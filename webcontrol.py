@@ -81,8 +81,6 @@ class CarControl(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
             self.end_headers()
-            position = car.getPosition()
-            path = []
             while running:
                 try:
                     img = camera.read()
@@ -105,19 +103,22 @@ class CarControl(SimpleHTTPRequestHandler):
                             cv2.imwrite(filename, img)
                             print "Captured", filename
 
-                    delta = car.getPosition(position)
-                    if np.linalg.norm(delta) > 1.0:
-                        position = car.getPosition()
-                        path.append([
-                            camera.resolution[0] * 0.5 + position[0] * 0.1,
-                            camera.resolution[1] * 0.5 + position[1] * 0.1
-                            ])
+                    img_center = [
+                        camera.resolution[0] * 0.5,
+                        camera.resolution[1] * 0.5
+                        ]
+                    path = [
+                        [
+                            img_center[0] + p[0] * 0.1,
+                            img_center[1] + p[1] * 0.1
+                            ]
+                        for p in car.path
+                        ]
+
                     if len(path) > 1:
                         cv2.polylines(
                             img,
-                            #path,
                             [np.array(path, np.int32)],
-                            #[np.array(path, np.int32).reshape((-1,1,2))],
                             False,
                             (0,255,255)
                             )
