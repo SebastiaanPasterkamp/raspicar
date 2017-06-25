@@ -128,7 +128,7 @@ class Car(object):
         self.pins = self.forward + self.backwards
 
         # Set car's physical properties
-        self.speed_rpm = car.get('max_speed_rpm', 0.5)
+        self.speed_rps = car.get('max_speed_rpm', 150.0) / 60.0
         self.rotation_max_angle = (
                 2.0 * math.pi * car.get('max_rotation_angle', 45.0)
                 ) / 360.0
@@ -179,7 +179,7 @@ class Car(object):
             dr = self.dead_reckoning
             delta_T = time.time() - dr['T']
 
-            distance = self.speed * self.speed_rpm \
+            distance = self.speed * self.speed_rps \
                 * self.wheel_circumference * delta_T
             turn = math.tan(self.rotation * self.rotation_max_angle) \
                 * distance / self.vehicle_length
