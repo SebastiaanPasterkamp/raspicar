@@ -42,6 +42,9 @@ camera = VideoCamera(
 camera_quality = 55
 
 img = camera.read()
+while img is None:
+    img = camera.read()
+
 odometry = VisualOdometry(
     img,
     100, 150
@@ -113,6 +116,7 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ts.strftime('capture.%Y%m%d-%H%M%S.png')
                                 ))
                             cv2.imwrite(filename, img)
+                            print "Captured", filename
 
                     for feature in odometry.features:
                         cv2.circle(
