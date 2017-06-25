@@ -187,14 +187,12 @@ class Car(object):
                 delta_time
                 )
 
-            self._setSpeed(clamp(
-                self.target_speed - self.speed,
-                -0.1 * delta_time, 0.1 * delta_time
-                ))
-            self._setDirection(clamp(
-                self.target_rotation - self.rotation,
-                -0.5 * delta_time, 0.5 * delta_time
-                ))
+            self._setSpeed(
+                self.speed + clamp(self.target_speed - self.speed, -0.5 * delta_time, 0.5 * delta_time)
+                )
+            self._setDirection(
+                self.rotation + clamp(self.target_rotation - self.rotation, -0.5 * delta_time, 0.5 * delta_time)
+                )
 
             time.sleep(0.01)
 
