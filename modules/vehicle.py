@@ -135,6 +135,10 @@ class Car(object):
         self.vehicle_length = car.get('vehicle_length', 20)
         self.wheel_circumference = car.get('wheel_diameter', 5.0) * math.pi
 
+    def _log(self, message):
+        if self.debug:
+            sys.stderr.write(message + "\n")
+
     def start(self):
         self._log("Setting up pins for output: %r" % self.pins)
         # Set all pins' mode as output
@@ -149,12 +153,12 @@ class Car(object):
         Thread(target=self.update, args=()).start()
         return self
 
-    def _log(self, message):
-        if self.debug:
-            sys.stderr.write(message + "\n")
-
     def update(self):
-        """ Dead Reckoning formula:
+        """ Sets actual speed / steering to desired values
+        slowely. After which it estimates it's current position
+        using Dead Reckoning.
+
+        Dead Reckoning formula:
         if Steering ~ 0:
             # straight line
             Position x += cos(Orientation) * Velocity * Time
@@ -169,45 +173,60 @@ class Car(object):
             Position y -= cos(Orientation) * Radius
         """
         self.dead_reckoning = {
-            'T': time.time(),
             'P': [0., 0.], # Position
             'O': 0.0 # Orientation
             }
-        time.sleep(0.25)
-        radian = math.pi * 2.0
+        last_time = time.time()
+        clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
+        time.sleep(0.01)
         while self.running:
-            dr = self.dead_reckoning
-            delta_T = time.time() - dr['T']
+            last_time, delta_time = time.time(), time.time() - last_time
 
-            distance = self.speed * self.speed_rps \
-                * self.wheel_circumference * delta_T
-            turn = math.tan(self.rotation * self.rotation_max_angle) \
-                * distance / self.vehicle_length
+            self.dead_reckoning = self._DeadReckoning(
+                self.dead_reckoning,
+                delta_time
+                )
 
-            update = {
-                'T': dr['T'] + delta_T,
-                'P': dr['P'],
-                'O': dr['O']
-                }
-            if abs(turn) <= 0.0001:
-                update['P'] = [
-                    dr['P'][0] + math.cos(dr['O']) * distance,
-                    dr['P'][1] + math.sin(dr['O']) * distance
-                    ]
-                update['O'] = (dr['O'] + turn) % radian
-            else:
-                radius = distance / turn
-                update['P'] = [
-                    dr['P'][0] - math.sin(dr['O']) * radius,
-                    dr['P'][1] + math.cos(dr['O']) * radius
-                    ]
-                update['O'] = (dr['O'] + turn) % radian
-                update['P'] = [
-                    update['P'][0] + math.sin(update['O']) * radius,
-                    update['P'][1] - math.cos(update['O']) * radius
-                    ]
-            self.dead_reckoning = update
-            time.sleep(0.25)
+            self._setSpeed(clamp(
+                self.target_speed - self.speed,
+                -0.1 * delta_time, 0.1 * delta_time
+                ))
+            self._setDirection(clamp(
+                self.target_rotation - self.rotation,
+                -0.5 * delta_time, 0.5 * delta_time
+                ))
+
+            time.sleep(0.01)
+
+    def _DeadReckoning(self, dr, delta_T):
+        radian = math.pi * 2.0
+        distance = self.speed * self.speed_rps \
+            * self.wheel_circumference * delta_T
+        turn = math.tan(self.rotation * self.rotation_max_angle) \
+            * distance / self.vehicle_length
+
+        update = {
+            'P': dr['P'],
+            'O': dr['O']
+            }
+        if abs(turn) <= 0.0001:
+            update['P'] = [
+                dr['P'][0] + math.cos(dr['O']) * distance,
+                dr['P'][1] + math.sin(dr['O']) * distance
+                ]
+            update['O'] = (dr['O'] + turn) % radian
+        else:
+            radius = distance / turn
+            update['P'] = [
+                dr['P'][0] - math.sin(dr['O']) * radius,
+                dr['P'][1] + math.cos(dr['O']) * radius
+                ]
+            update['O'] = (dr['O'] + turn) % radian
+            update['P'] = [
+                update['P'][0] + math.sin(update['O']) * radius,
+                update['P'][1] - math.cos(update['O']) * radius
+                ]
+        return update
 
     def getPosition(self, old_P=None):
         """ Get the current position. If a prior position P is provided,
@@ -229,6 +248,9 @@ class Car(object):
         self.GPIO.cleanup(self.pins)
 
     def setSpeed(self, speed=0.0):
+        self.target_speed = speed
+
+    def _setSpeed(self, speed=0.0):
         # Set movement speed ranging from -1.0 to 1.0
         # Stop: speed = 0.0
         # Forward: 0.0 > speed >= 1.0
@@ -276,6 +298,9 @@ class Car(object):
         self.speed = speed
 
     def setDirection(self, rotation=0.0):
+        self.target_rotation = rotation
+
+    def _setDirection(self, rotation=0.0):
         # Set rotation ranging from -1.0 to 1.0
         # Straight: rotation = 0.0
         # Left : rotation between -1.0 and 0.0
