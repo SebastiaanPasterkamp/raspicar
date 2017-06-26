@@ -39,7 +39,8 @@ from modules.vehicle import Car
 from modules.camera import VideoCamera, VisualOdometry
 
 camera = VideoCamera(
-    -1, usePiCamera=usePiCamera, resolution=(1280, 720)).start()
+    -1, usePiCamera=usePiCamera, resolution=(1280, 720),
+    framerate=10).start()
 camera_quality = 55
 
 img = camera.read()
@@ -69,14 +70,12 @@ running = True
 capture = False
 grid = False
 last_snapshot = time.time()
-record = False
-video_writer = None
 class CarControl(SimpleHTTPRequestHandler):
     def shutdown(self):
         super(CarControl, self).shutdown()
 
     def do_GET(self):
-        global running, capture, grid, last_snapshot, record, video_writer
+        global running, capture, grid, last_snapshot
 
         if self.path == '/camera':
             self.send_response(200)
@@ -86,10 +85,6 @@ class CarControl(SimpleHTTPRequestHandler):
                 try:
                     img = camera.read()
                     odometry.followFeatures(img)
-
-                    if record:
-                        video_writer.write(img)
-                        continue
 
                     if capture:
                         if last_snapshot <= time.time():
@@ -157,7 +152,7 @@ class CarControl(SimpleHTTPRequestHandler):
             return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
-        global capture, grid, record, video_writer
+        global capture, grid
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
@@ -205,26 +200,12 @@ class CarControl(SimpleHTTPRequestHandler):
                         'record',
                         ts.strftime('video-%Y%m%d-%H%M%S.avi')
                         ))
-                    # Define the codec and create VideoWriter object
-                    fourcc = None
-                    if callable(cv2.cv.CV_FOURCC):
-                        fourcc = cv2.cv.CV_FOURCC(*'MJPG')
-                    else:
-                        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                    video_writer = cv2.VideoWriter(
-                        filename, fourcc,
-                        camera.framerate, # fps
-                        camera.resolution # width, height
-                        )
-                    print "recording to '%s', %rx%r @%r: %r" % (
+                    camera.record(filename)
+                    print "recording to '%s', %rx%r @%r" % (
                         filename, camera.framerate,
-                        camera.resolution[0], camera.resolution[1],
-                        video_writer)
-                    if video_writer is None:
-                        record = False
+                        camera.resolution[0], camera.resolution[1])
                 else:
-                    video_writer.release()
-                    video_writer = None
+                    camera.record(None)
 
 if __name__ == "__main__":
     port = 8000
