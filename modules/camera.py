@@ -62,6 +62,7 @@ class CameraStream(object):
 
         self.frame = None
         self.stopped = False
+        self.video_writer = None
 
     def start(self):
         """ start the thread to read frames from the video stream """
@@ -80,13 +81,37 @@ class CameraStream(object):
         """ indicate that the thread should be stopped """
         self.stopped = True
 
+    def process(self, frame):
+        if self.video_writer is not None:
+            self.video_writer.write(frame)
+
+    def record(self, path):
+        if path is None:
+            if self.video_writer is not None:
+                self.video_writer.release()
+                self.video_writer = None
+            return
+
+        fourcc = None
+        if callable(cv2.cv.CV_FOURCC):
+            fourcc = cv2.cv.CV_FOURCC(*'MJPG')
+        else:
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        self.video_writer = cv2.VideoWriter(
+            path, fourcc,
+            self.framerate, # fps
+            (
+                int(self.resolution[0]),        # width
+                int(self.resolution[1])         # height
+            ))
 
 class WebcamCameraStream(CameraStream):
     def __init__(self, src=0, resolution=(320, 240), framerate=32):
         """ initialize the video camera stream and read the first frame
         from the stream
         """
-        super(WebcamCameraStream, self).__init__(resolution, framerate)
+        super(WebcamCameraStream, self).__init__(
+            resolution=resolution, framerate=framerate)
 
         self.stream = cv2.VideoCapture(src)
         self.stream.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH,
@@ -100,6 +125,8 @@ class WebcamCameraStream(CameraStream):
             self.stream.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
             )
         self.framerate = self.stream.get(cv2.cv.CV_CAP_PROP_FPS)
+        if self.framerate <= 0:
+            self.framerate = framerate
 
         (self.grabbed, self.frame) = self.stream.read()
 
@@ -112,12 +139,13 @@ class WebcamCameraStream(CameraStream):
 
             # otherwise, read the next frame from the stream
             (self.grabbed, self.frame) = self.stream.read()
-
+            self.process(self.frame)
 
 class PiCameraStream(CameraStream):
     def __init__(self, resolution=(320, 240), framerate=32):
         """ initialize the camera and stream """
-        super(PiCameraStream, self).__init__(resolution, framerate)
+        super(PiCameraStream, self).__init__(
+            resolution=resolution, framerate=framerate)
 
         self.camera = PiCamera()
         self.camera.resolution = resolution
@@ -133,6 +161,7 @@ class PiCameraStream(CameraStream):
             # preparation for the next frame
             self.frame = f.array
             self.rawCapture.truncate(0)
+            self.process(self.frame)
 
             # if the thread indicator variable is set, stop the thread
             # and resource camera resources
@@ -146,19 +175,21 @@ class PiCameraStream(CameraStream):
 class VideoCamera(CameraStream):
     def __init__(self, src=0, usePiCamera=False,
                  resolution=(320, 240), framerate=32):
-        super(VideoCamera, self).__init__()
+        super(VideoCamera, self).__init__(
+            resolution=resolution, framerate=framerate)
 
         # check to see if the picamera module should be used
         if usePiCamera:
             # initialize the picamera stream and allow the camera
             # sensor to warmup
-            self.stream = PiCameraStream(resolution=resolution,
-                framerate=framerate)
+            self.stream = PiCameraStream(
+                resolution=resolution, framerate=framerate)
 
         # otherwise, we are using OpenCV so initialize the webcam
         # stream
         else:
-            self.stream = WebcamCameraStream(src=src)
+            self.stream = WebcamCameraStream(
+                src=src, resolution=resolution, framerate=framerate)
 
     def start(self):
         # start the threaded video stream
@@ -175,7 +206,6 @@ class VideoCamera(CameraStream):
     def stop(self):
         # stop the thread and release any resources
         self.stream.stop()
-
 
 class VisualOdometry(object):
     def __init__(self, start_image,
