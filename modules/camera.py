@@ -194,6 +194,92 @@ class VisualOdometry(object):
         # Make sure we have features
         self.findNewFeatures()
 
+    def initGrid(self, size=(5.,5.), features=(5,5), shape='chess'):
+        """ Initialize a chessboard or circle grid of SIZE mm with
+        FEATURES features in SHAPE formation.
+
+        - size:         tuple of (width, height) in mm
+        - features:     tuple of (width, height) features
+        - shape:        string with 'chess', 'circle', 'asymetric'
+                        to clearify the type of grid being tracked
+        """
+
+        self.grid = {
+            'size': size,
+            'features': features,
+            'shape': shape,
+            'objp': None,
+            'method': cv2.findCirclesGrid,
+            'flags': cv2.CALIB_CB_CLUSTERING,
+            'corners': None
+            }
+        if self.grid['shape'] == 'asymetric':
+            self.grid['flags'] = cv2.CALIB_CB_ASYMMETRIC_GRID \
+                | cv2.CALIB_CB_CLUSTERING
+
+            self.grid['objp'] = np.array([
+                [
+                    np.float32(
+                        y * size[1] / (features[1]-1)
+                        ),
+                    np.float32(
+                        (x + (y%2) * .5) * size[0] / (features[0]-0.5)
+                        ),
+                    np.float32(0.0)
+                    ]
+                    for y in range(features[1])
+                    for x in range(features[0])
+                ])
+        else:
+            if self.grid['shape'] == 'chess':
+                self.grid['method'] = cv2.findChessboardCorners
+            self.grid['objp'] = np.array([
+                [
+                    np.float32(y * size[1] / (features[1]-1)),
+                    np.float32(x * size[0] / (features[0]-1)),
+                    np.float32(0.0)
+                    ]
+                    for y in range(features[1])
+                    for x in range(features[0])
+                ])
+
+    def getGrid(self, new_image):
+        self.current = cv2.cvtColor(new_image, cv2.COLOR_BGR2GRAY)
+
+        status, corners = self.grid['method'](
+            self.current,
+            self.grid['features'],
+            flags=self.grid['flags']
+            )
+
+        if status:
+            self.grid['corners'] = corners
+        elif self.grid['corners'] is not None:
+            # calculate optical flow
+            corners, status, error = cv2.calcOpticalFlowPyrLK(
+                self.previous,
+                self.current,
+                self.grid['corners'],
+                winSize=(20, 20),
+                maxLevel=2,
+                criteria=(
+                    cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                    10, 0.03
+                    )
+                )
+            corners = np.float32([
+                c for i, c in enumerate(corners) if status[i]
+                ])
+
+            if len(corners) == len(self.grid['corners']):
+                status = True
+                self.grid['corners'] = corners
+            else:
+                status = False
+
+        self.previous, self.current = self.current, self.previous
+        return status, corners
+
     def followFeatures(self, new_image):
         self.current = cv2.cvtColor(new_image, cv2.COLOR_BGR2GRAY)
 
