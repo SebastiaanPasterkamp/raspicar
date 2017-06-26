@@ -208,21 +208,42 @@ class VideoCamera(CameraStream):
         self.stream.stop()
 
 class VisualOdometry(object):
-    def __init__(self, start_image,
-                 min_features=100, max_features=200, min_distance=32):
+    def __init__(self, camera):
+        self.camera = camera
 
+        start_image = self.camera.read()
+        while start_image is None:
+            start_image = self.camera.read()
         self.previous = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
         self.current = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
 
-        self.min_features = min_features
-        self.max_features = max_features
-        self.min_distance = min_distance
+        self.path = []
 
-        self.quality = 0.05
-        self.features = []
+        self.running = True
+        self.trackGrid = False
+        self.trackFeatures = False
 
-        # Make sure we have features
-        self.findNewFeatures()
+    def start(self):
+        """ start the thread to read frames from the video stream """
+        if self.trackGrid or self.trackFeatures:
+            Thread(target=self.update, args=()).start()
+        return self
+
+    def stop(self):
+        self.running = False
+
+    def update(self):
+        while self.running:
+            new_frame = self.camera.read()
+
+            self.previous, self.current = self.current, cv2.cvtColor(
+                new_frame, cv2.COLOR_BGR2GRAY)
+
+            if self.trackFeatures:
+                self.followFeatures()
+
+            if self.trackGrid:
+                self.followGrid()
 
     def initGrid(self, size=(5.,5.), features=(5,5), shape='chess'):
         """ Initialize a chessboard or circle grid of SIZE mm with
@@ -241,6 +262,7 @@ class VisualOdometry(object):
             'objp': None,
             'method': cv2.findCirclesGrid,
             'flags': cv2.CALIB_CB_CLUSTERING,
+            'status': False,
             'corners': None
             }
         if self.grid['shape'] == 'asymetric':
@@ -272,10 +294,9 @@ class VisualOdometry(object):
                     for y in range(features[1])
                     for x in range(features[0])
                 ])
+        self.trackGrid = True
 
-    def getGrid(self, new_image):
-        self.current = cv2.cvtColor(new_image, cv2.COLOR_BGR2GRAY)
-
+    def followGrid(self):
         status, corners = self.grid['method'](
             self.current,
             self.grid['features'],
@@ -283,6 +304,7 @@ class VisualOdometry(object):
             )
 
         if status:
+            self.grid['status'] = True
             self.grid['corners'] = corners
         elif self.grid['corners'] is not None:
             # calculate optical flow
@@ -302,59 +324,92 @@ class VisualOdometry(object):
                 ])
 
             if len(corners) == len(self.grid['corners']):
-                status = True
+                self.grid['status'] = True
                 self.grid['corners'] = corners
             else:
-                status = False
+                self.grid['status'] = False
 
-        self.previous, self.current = self.current, self.previous
-        return status, corners
+        if self.grid['status']:
+            rvecs, tvecs, inliers = cv2.solvePnPRansac(
+                self.grid['objp'],
+                self.grid['corners'],
+                self.camera.mtx, self.camera.dist
+                )
+            self.path.append([tvecs[0][0], tvecs[1][0]])
 
-    def followFeatures(self, new_image):
-        self.current = cv2.cvtColor(new_image, cv2.COLOR_BGR2GRAY)
+    def getGrid(self):
+        if self.followGrid:
+            return self.grid['status'], self.grid['corners']
 
+    def initFeatures(self, min_features=100, max_features=200,
+                     min_distance=32):
+
+        self.features = {
+            'min': min_features,
+            'max': max_features,
+            'distance': min_distance,
+            'quality': 0.05,
+            'points': []
+            }
+
+        # Make sure we have features
+        self.findNewFeatures()
+        self.trackFeatures = True
+
+    def followFeatures(self):
         # calculate optical flow
-        old_features = np.float32(self.features)
+        old_features = np.float32(self.features['points'])
         new_features, status, error = cv2.calcOpticalFlowPyrLK(
             self.previous,
             self.current,
             old_features,
-            winSize=(int(self.min_distance), int(self.min_distance)),
+            winSize=(
+                int(self.features['distance']),
+                int(self.features['distance'])
+                ),
             maxLevel=2,
-            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+            criteria=(
+                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                10, 0.03
+                )
             )
 
-        self.features = [
+        self.features['points'] = [
             tuple(feature.ravel())
             for i, feature in enumerate(new_features)
             if status[i]
             ]
 
-        if len(self.features) < self.min_features:
+        if len(self.features['points']) < self.features['min']:
             #Make sure we have enough features
             self.findNewFeatures()
 
-        self.previous, self.current = self.current, self.previous
+    def getFeatures(self):
+        if self.trackFeatures:
+            return self.features['points']
 
     def findNewFeatures(self):
         # Avoid sampling new features around current features
         mask = np.zeros_like(self.current)
         mask[:] = 255
 
-        for f in self.features:
+        for f in self.features['points']:
             cv2.circle(mask, f, 5, 0, -1)
 
         new_features = cv2.goodFeaturesToTrack(
             image=self.current,
-            maxCorners=self.max_features - len(self.features),
-            qualityLevel=self.quality,
-            minDistance=self.min_distance,
+            maxCorners=\
+                self.features['max'] - len(self.features['points']),
+            qualityLevel=self.features['quality'],
+            minDistance=self.features['distance'],
             mask=mask
             )
 
         if new_features is not None:
-            for x, y in np.float32(new_features).reshape(-1, 2):
-                self.features.append((x, y))
+            self.features['points'].extend([
+                (x,y)
+                for x, y in np.float32(new_features).reshape(-1, 2)
+                ])
 
 if __name__ == '__main__':
     capture = cv2.VideoCapture(-1)
