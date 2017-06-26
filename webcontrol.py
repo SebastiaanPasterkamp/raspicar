@@ -43,6 +43,11 @@ camera = VideoCamera(
     framerate=10).start()
 camera_quality = 55
 
+if os.path.exists('camera_calib.npz'):
+    # Load previously saved data
+    with np.load('camera_calib.npz') as calib:
+        camera.mtx, camera.dist = [calib[i] for i in ('mtx','dist')]
+
 img = camera.read()
 while img is None:
     img = camera.read()
@@ -67,14 +72,13 @@ car.start()
 
 running = True
 capture = False
-grid = False
 last_snapshot = time.time()
 class CarControl(SimpleHTTPRequestHandler):
     def shutdown(self):
         super(CarControl, self).shutdown()
 
     def do_GET(self):
-        global running, capture, grid, last_snapshot
+        global running, capture, last_snapshot
 
         if self.path == '/camera':
             self.send_response(200)
@@ -97,14 +101,12 @@ class CarControl(SimpleHTTPRequestHandler):
                             cv2.imwrite(filename, img)
                             print "Captured", filename
 
-                    if grid:
-                        status, corners = odometry.getGrid()
-
-                        if status:
-                            # Draw and display the corners
-                            cv2.drawChessboardCorners(
-                                img, odometry.grid['features'],
-                                corners, status)
+                    status, corners = odometry.getGrid()
+                    if status:
+                        # Draw and display the corners
+                        cv2.drawChessboardCorners(
+                            img, odometry.grid['features'],
+                            corners, status)
 
                     img_center = [
                         camera.resolution[0] * 0.5,
@@ -170,7 +172,7 @@ class CarControl(SimpleHTTPRequestHandler):
             return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
-        global capture, grid
+        global capture
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
@@ -199,7 +201,6 @@ class CarControl(SimpleHTTPRequestHandler):
                     (4, 11),
                     'asymetric'
                     )
-                grid = bool(data['grid'])
 
             if 'record' in data:
                 record = bool(data['record'])
