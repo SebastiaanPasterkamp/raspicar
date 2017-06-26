@@ -47,10 +47,9 @@ img = camera.read()
 while img is None:
     img = camera.read()
 
-odometry = VisualOdometry(
-    img,
-    100, 150
-    )
+odometry = VisualOdometry(camera)
+odometry.initFeatures(100, 150)
+odometry.start()
 
 config = {}
 config_file = os.path.abspath(os.path.join(
@@ -84,7 +83,6 @@ class CarControl(SimpleHTTPRequestHandler):
             while running:
                 try:
                     img = camera.read()
-                    odometry.followFeatures(img)
 
                     if capture:
                         if last_snapshot <= time.time():
@@ -100,7 +98,7 @@ class CarControl(SimpleHTTPRequestHandler):
                             print "Captured", filename
 
                     if grid:
-                        status, corners = odometry.getGrid(img)
+                        status, corners = odometry.getGrid()
 
                         if status:
                             # Draw and display the corners
@@ -128,7 +126,27 @@ class CarControl(SimpleHTTPRequestHandler):
                             (0,255,255)
                             )
 
-                    for feature in odometry.features:
+                    path = []
+                    if len(odometry.path):
+                        first = odometry.path[0]
+                        path = [
+                            [
+                                img_center[0] + p[0] * 0.1 - first[0],
+                                img_center[1] + p[1] * 0.1 - first[1]
+                                ]
+                            for p in odometry.path
+                            ]
+
+                    if len(path) > 1:
+                        cv2.polylines(
+                            img,
+                            [np.array(path, np.int32)],
+                            False,
+                            (0,0,255)
+                            )
+
+                    features = odometry.getFeatures()
+                    for feature in features:
                         cv2.circle(
                             img,
                             (int(feature[0]), int(feature[1])),
@@ -220,6 +238,7 @@ if __name__ == "__main__":
         server.serve_forever()
     except KeyboardInterrupt:
         running = False
+        odometry.stop()
         camera.stop()
         server.shutdown()
         car.stop()
