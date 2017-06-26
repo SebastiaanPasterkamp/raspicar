@@ -435,11 +435,12 @@ class VisualOdometry(object):
                 self.grid['corners'],
                 self.camera.mtx, self.camera.dist
                 )
-            self.path.append([tvecs[0][0], tvecs[1][0]])
+            self.path.append([tvecs[0][0], tvecs[2][0]])
 
     def getGrid(self):
-        if self.followGrid:
+        if self.trackGrid:
             return self.grid['status'], self.grid['corners']
+        return False, []
 
     def initFeatures(self, min_features=100, max_features=200,
                      min_distance=32):
@@ -459,6 +460,11 @@ class VisualOdometry(object):
     def followFeatures(self):
         # calculate optical flow
         old_features = np.float32(self.features['points'])
+        if not len(old_features):
+            #Make sure we have enough features
+            self.findNewFeatures()
+            return
+
         new_features, status, error = cv2.calcOpticalFlowPyrLK(
             self.previous,
             self.current,
@@ -487,6 +493,7 @@ class VisualOdometry(object):
     def getFeatures(self):
         if self.trackFeatures:
             return self.features['points']
+        return []
 
     def findNewFeatures(self):
         # Avoid sampling new features around current features
