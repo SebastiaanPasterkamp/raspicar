@@ -67,6 +67,7 @@ car.start()
 
 running = True
 capture = False
+grid = False
 last_snapshot = time.time()
 record = False
 video_writer = None
@@ -75,7 +76,7 @@ class CarControl(SimpleHTTPRequestHandler):
         super(CarControl, self).shutdown()
 
     def do_GET(self):
-        global running, capture, last_snapshot, record, video_writer
+        global running, capture, grid, last_snapshot, record, video_writer
 
         if self.path == '/camera':
             self.send_response(200)
@@ -102,6 +103,15 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ))
                             cv2.imwrite(filename, img)
                             print "Captured", filename
+
+                    if grid:
+                        status, corners = odometry.getGrid(img)
+
+                        if status:
+                            # Draw and display the corners
+                            cv2.drawChessboardCorners(
+                                img, camera.grid['features'],
+                                corners, status)
 
                     img_center = [
                         camera.resolution[0] * 0.5,
@@ -147,7 +157,7 @@ class CarControl(SimpleHTTPRequestHandler):
             return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self):
-        global capture, record, video_writer
+        global capture, grid, record, video_writer
         if self.path == '/control':
             self.send_response(200)
             data_string = self.rfile.read(int(self.headers['Content-Length']))
@@ -169,6 +179,14 @@ class CarControl(SimpleHTTPRequestHandler):
                     ))
                 if not os.path.isdir(target_dir):
                     os.mkdir(target_dir)
+
+            if 'grid' in data:
+                odometry.initGrid(
+                    (27.65, 39.51),
+                    (4, 11),
+                    'asymetric'
+                    )
+                grid = bool(data['grid'])
 
             if 'record' in data:
                 record = bool(data['record'])

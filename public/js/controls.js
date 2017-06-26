@@ -4,6 +4,7 @@ var $app = {
     ctx: null,
     requestAnimationFrame: null,
     capture: false,
+    grid: false,
     record: false,
 
     then: Date.now(),
@@ -291,6 +292,17 @@ $(document).ready(function(){
                 type: 'POST',
                 url: '/control',
                 data: JSON.stringify({'capture': $app.capture}),
+                contentType: "application/json",
+                dataType: 'json'
+            });
+        }
+
+        if (e.keyCode == 71) {
+            $app.grid = ! $app.grid;
+            $.ajax({
+                type: 'POST',
+                url: '/control',
+                data: JSON.stringify({'grid': $app.grid}),
                 contentType: "application/json",
                 dataType: 'json'
             });
