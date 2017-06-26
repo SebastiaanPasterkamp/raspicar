@@ -105,7 +105,7 @@ class CarControl(SimpleHTTPRequestHandler):
                         if status:
                             # Draw and display the corners
                             cv2.drawChessboardCorners(
-                                img, camera.grid['features'],
+                                img, odometry.grid['features'],
                                 corners, status)
 
                     img_center = [
