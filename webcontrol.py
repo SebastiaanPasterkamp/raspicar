@@ -40,8 +40,8 @@ from modules.camera import VideoCamera, VisualOdometry
 
 camera = VideoCamera(
     -1, usePiCamera=usePiCamera, resolution=(1280, 720),
-    framerate=10).start()
-camera_quality = 55
+    framerate=35).start()
+camera_quality = 95
 
 if os.path.exists('camera_calib.npz'):
     # Load previously saved data
@@ -108,44 +108,35 @@ class CarControl(SimpleHTTPRequestHandler):
                             img, odometry.grid['features'],
                             corners, status)
 
-                    img_center = [
-                        camera.resolution[0] * 0.5,
-                        camera.resolution[1] * 0.5
+                    center = [
+                        camera.resolution[0] * 0.25,
+                        camera.resolution[1] * 0.25
                         ]
-                    path = [
-                        [
-                            img_center[0] + p[0] * 0.1,
-                            img_center[1] + p[1] * 0.1
-                            ]
-                        for p in car.path
+                    paths = [
+                        (car.path, [center[0], center[1]], (0, 0, 255)),
+                        (odometry.grid_path, [center[0]*3, center[1]], (0, 255, 0)),
+                        (odometry.track_path, [center[0], center[1]*3], (255, 0, 0))
                         ]
 
-                    if len(path) > 1:
-                        cv2.polylines(
-                            img,
-                            [np.array(path, np.int32)],
-                            False,
-                            (0,255,255)
-                            )
-
-                    path = []
-                    if len(odometry.path):
-                        first = odometry.path[0]
-                        path = [
-                            [
-                                img_center[0] + p[0] * 0.1 - first[0],
-                                img_center[1] + p[1] * 0.1 - first[1]
+                    for path, img_center, color in paths:
+                        line = []
+                        if len(path):
+                            first = path[0]
+                            line = [
+                                [
+                                    img_center[0] + (p[0] - first[0]) * 0.1,
+                                    img_center[1] + (p[1] - first[1]) * 0.1
+                                    ]
+                                for p in path
                                 ]
-                            for p in odometry.path
-                            ]
 
-                    if len(path) > 1:
-                        cv2.polylines(
-                            img,
-                            [np.array(path, np.int32)],
-                            False,
-                            (0,0,255)
-                            )
+                        if len(line) > 1:
+                            cv2.polylines(
+                                img,
+                                [np.array(line, np.int32)],
+                                False,
+                                color
+                                )
 
                     features = odometry.getFeatures()
                     for feature in features:
