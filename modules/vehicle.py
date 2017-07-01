@@ -129,9 +129,8 @@ class Car(object):
 
         # Set car's physical properties
         self.speed_rps = car.get('max_speed_rpm', 150.0) / 60.0
-        self.rotation_max_angle = (
-                2.0 * math.pi * car.get('max_rotation_angle', 45.0)
-                ) / 360.0
+        self.rotation_max_angle = car.get('max_rotation_angle', 45.0) \
+            * math.pi / 180.0
         self.vehicle_length = car.get('vehicle_length', 20)
         self.wheel_circumference = car.get('wheel_diameter', 5.0) * math.pi
 
@@ -204,33 +203,34 @@ class Car(object):
             time.sleep(0.01)
 
     def _DeadReckoning(self, dr, delta_T):
-        radian = math.pi * 2.0
         distance = self.speed * self.speed_rps \
             * self.wheel_circumference * delta_T
-        turn = math.tan(self.rotation * self.rotation_max_angle) \
-            * distance / self.vehicle_length
+        steerAngle = self.rotation * self.rotation_max_angle
 
-        update = {
-            'P': dr['P'],
-            'O': dr['O']
+
+        offset = [
+            self.vehicle_length * 0.5 * math.cos(dr['O']),
+            self.vehicle_length * 0.5 * math.sin(dr['O'])
+            ]
+        frontWheel = [
+            dr['P'][0] + offset[0] + distance * math.cos(dr['O']+steerAngle),
+            dr['P'][1] + offset[1] + distance * math.sin(dr['O']+steerAngle)
+            ]
+        backWheel = [
+            dr['P'][0] - offset[0] + distance * math.cos(dr['O']),
+            dr['P'][1] - offset[1] + distance * math.sin(dr['O'])
+            ]
+
+        return {
+            'P': [
+                (frontWheel[0] + backWheel[0]) * 0.5,
+                (frontWheel[1] + backWheel[1]) * 0.5
+                ],
+            'O': math.atan2(
+                frontWheel[1] - backWheel[1],
+                frontWheel[0] + backWheel[0]
+                )
             }
-        if abs(turn) <= 0.0001:
-            update['P'] = [
-                dr['P'][0] + math.cos(dr['O']) * distance,
-                dr['P'][1] + math.sin(dr['O']) * distance
-                ]
-            update['O'] = (dr['O'] + turn) % radian
-        else:
-            radius = distance / turn
-            update['P'] = [
-                dr['P'][0] - math.sin(dr['O']) * radius,
-                dr['P'][1] + math.cos(dr['O']) * radius
-                ]
-            update['O'] = (dr['O'] + turn) % radian
-            update['P'] = [
-                update['P'][0] + math.sin(update['O']) * radius,
-                update['P'][1] - math.cos(update['O']) * radius
-                ]
         return update
 
     def getPosition(self, old_P=None):
