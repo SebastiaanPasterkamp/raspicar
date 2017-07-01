@@ -341,7 +341,8 @@ class VisualOdometry(object):
         self.previous = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
         self.current = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
 
-        self.path = []
+        self.grid_path = []
+        self.track_path = []
 
         self.running = True
         self.trackGrid = False
@@ -397,16 +398,14 @@ class VisualOdometry(object):
         self.trackGrid = True
 
     def followGrid(self):
-        status, corners = self.grid['method'](
+        track_status = False
+        grid_status, corners = self.grid['method'](
             self.current,
             self.grid['features'],
             flags=self.grid['flags']
             )
 
-        if status:
-            self.grid['status'] = True
-            self.grid['corners'] = corners
-        elif self.grid['corners'] is not None:
+        if not grid_status and self.grid['corners'] is not None:
             # calculate optical flow
             corners, status, error = cv2.calcOpticalFlowPyrLK(
                 self.previous,
@@ -423,19 +422,19 @@ class VisualOdometry(object):
                 c for i, c in enumerate(corners) if status[i]
                 ])
 
-            if len(corners) == len(self.grid['corners']):
-                self.grid['status'] = True
-                self.grid['corners'] = corners
-            else:
-                self.grid['status'] = False
+            track_status = (len(corners) == len(self.grid['corners']))
 
-        if self.grid['status']:
+        if grid_status or track_status:
+            self.grid['status'], self.grid['corners'] = True, corners
+
             rvecs, tvecs, inliers = cv2.solvePnPRansac(
                 self.grid['objp'],
-                self.grid['corners'],
+                corners,
                 self.camera.mtx, self.camera.dist
                 )
-            self.path.append([tvecs[0][0], tvecs[2][0]])
+            if grid_status:
+                self.grid_path.append([tvecs[2][0], tvecs[0][0]])
+            self.track_path.append([tvecs[2][0], tvecs[0][0]])
 
     def getGrid(self):
         if self.trackGrid:
