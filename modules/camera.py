@@ -207,6 +207,130 @@ class VideoCamera(CameraStream):
         # stop the thread and release any resources
         self.stream.stop()
 
+class Calibration(object):
+    def __init__(self, images, min_examples, pattern, grid, size):
+        """ Calibrate the camera attributes using example images
+        containing a known calibration pattern.
+
+        - images:       list of example images potentially containing
+                        a detectable pattern (not guarenteed).
+        - min_examples: minimum number of examples to calibrate with.
+        - pattern:      type of pattern in the image: chess, circles,
+                        or asymetric.
+        - grid:         number of features in the example pattern.
+        - size:         real-world dimensions of the pattern.
+
+        The geometries are expected to be (width, height).
+        """
+
+        self.images = images
+        self.min_examples = min_examples
+        self.pattern = pattern
+        self.grid = grid
+        self.size = size
+
+        self.examples = {
+            'object_points': [],
+            'image_points': []
+            }
+        self.object_points = Calibration.getObjectPoints(
+            pattern, grid, size)
+        self.method = cv2.findCirclesGrid
+        self.flags = cv2.CALIB_CB_CLUSTERING
+
+        if pattern == 'asymetric':
+            self.flags = cv2.CALIB_CB_ASYMMETRIC_GRID \
+                | cv2.CALIB_CB_CLUSTERING
+        if pattern == 'chess':
+            self.method = cv2.findChessboardCorners
+
+    @staticmethod
+    def getObjectPoints(pattern, grid, size):
+        if pattern == 'asymetric':
+            return np.array([
+                [
+                    np.float32(
+                        y * size[1] / (grid[1]-1)
+                        ),
+                    np.float32(
+                        (x + (y%2) * .5) * size[0] / (grid[0]-0.5)
+                        ),
+                    np.float32(0.0)
+                    ]
+                    for y in range(grid[1])
+                    for x in range(grid[0])
+                ])
+        return np.array([
+            [
+                np.float32(y * size[1] / (grid[1]-1)),
+                np.float32(x * size[0] / (grid[0]-1)),
+                np.float32(0.0)
+                ]
+                for y in range(grid[1])
+                for x in range(grid[0])
+            ])
+
+    def collectExamples(self):
+        img_shape = None
+        example_count = 0
+        for fname in self.images:
+            img = cv2.imread(fname)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.medianBlur(gray, 5)
+            img_shape = gray.shape[::-1]
+
+            # Find the chess board corners
+            status, corners = self.method(
+                gray, self.grid, flags=self.flags
+                )
+
+            # If found, add object points and image points
+            if status == True:
+                print "Pattern found in '%s'" % fname
+                self.examples['object_points'].append(
+                    self.object_points)
+                self.examples['image_points'].append(corners)
+                example_count += 1
+            else:
+                print "No pattern found in '%s'" % fname
+
+        if example_count < self.min_examples:
+            print "Not enough usable examples found. Need %d, only found %d" % (
+                self.min_examples, example_count
+                )
+            return False
+        return True
+
+    def calibrate(self, output_file=None):
+        example_count = len(self.examples['image_points'])
+        print "Calibrating based on %d samples" % example_count
+
+        img = cv2.imread(self.images[0])
+        img_shape = img.shape[::2]
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+            self.examples['object_points'],
+            self.examples['image_points'],
+            img_shape
+            )
+
+        mean_error = 0.0
+        for i in range(example_count):
+            corners, _ = cv2.projectPoints(
+                self.examples['object_points'][i],
+                rvecs[i], tvecs[i], mtx, dist)
+            error = cv2.norm(
+                self.examples['image_points'][i],
+                corners, cv2.NORM_L2) / len(corners)
+            mean_error += error
+
+        print 'mtx', mtx
+        print 'dist', dist
+        print "total error: ", mean_error / example_count
+
+        if output_file:
+            np.savez(output_file, mtx=mtx, dist=dist)
+        return True
+
 class VisualOdometry(object):
     def __init__(self, camera):
         self.camera = camera
@@ -245,55 +369,31 @@ class VisualOdometry(object):
             if self.trackGrid:
                 self.followGrid()
 
-    def initGrid(self, size=(5.,5.), features=(5,5), shape='chess'):
+    def initGrid(self, pattern='chess', grid=(5,5), size=(5.,5.)):
         """ Initialize a chessboard or circle grid of SIZE mm with
-        FEATURES features in SHAPE formation.
+        FEATURES features in PATTERN formation.
 
-        - size:         tuple of (width, height) in mm
-        - features:     tuple of (width, height) features
-        - shape:        string with 'chess', 'circle', 'asymetric'
+        - pattern:      string with 'chess', 'circles', 'asymetric'
                         to clearify the type of grid being tracked
+        - grid:         tuple of (width, height) features
+        - size:         tuple of (width, height) in mm
         """
 
         self.grid = {
+            'pattern': pattern,
+            'grid': grid,
             'size': size,
-            'features': features,
-            'shape': shape,
-            'objp': None,
+            'objp': Calibration.getObjectPoints(pattern, grid, size),
             'method': cv2.findCirclesGrid,
             'flags': cv2.CALIB_CB_CLUSTERING,
             'status': False,
             'corners': None
             }
-        if self.grid['shape'] == 'asymetric':
+        if self.grid['pattern'] == 'asymetric':
             self.grid['flags'] = cv2.CALIB_CB_ASYMMETRIC_GRID \
                 | cv2.CALIB_CB_CLUSTERING
-
-            self.grid['objp'] = np.array([
-                [
-                    np.float32(
-                        y * size[1] / (features[1]-1)
-                        ),
-                    np.float32(
-                        (x + (y%2) * .5) * size[0] / (features[0]-0.5)
-                        ),
-                    np.float32(0.0)
-                    ]
-                    for y in range(features[1])
-                    for x in range(features[0])
-                ])
-        else:
-            if self.grid['shape'] == 'chess':
-                self.grid['method'] = cv2.findChessboardCorners
-            self.grid['objp'] = np.array([
-                [
-                    np.float32(y * size[1] / (features[1]-1)),
-                    np.float32(x * size[0] / (features[0]-1)),
-                    np.float32(0.0)
-                    ]
-                    for y in range(features[1])
-                    for x in range(features[0])
-                ])
+        if self.grid['pattern'] == 'chess':
+            self.grid['method'] = cv2.findChessboardCorners
         self.trackGrid = True
 
     def followGrid(self):
