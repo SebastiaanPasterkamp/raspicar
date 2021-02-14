@@ -11,7 +11,8 @@ from threading import Thread
 try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
-except:
+except ImportError as e:
+    print("Not running on a Raspberry Pi", e)
     import os
     sys.path.insert(0, os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..'
@@ -173,11 +174,11 @@ class Car(object):
             Position y -= cos(Orientation) * Radius
         """
         self.dead_reckoning = {
-            'P': [0., 0.], # Position
-            'O': 0.0 # Orientation
+            'P': [0., 0.],  # Position
+            'O': 0.0  # Orientation
             }
         last_time = time.time()
-        clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
+        def clamp(n, minn, maxn): return max(min(maxn, n), minn)
         time.sleep(0.01)
         last_position = self.getPosition()
         while self.running:
@@ -194,10 +195,13 @@ class Car(object):
                 self.path.append(last_position)
 
             self._setSpeed(
-                self.speed + clamp(self.target_speed - self.speed, -1.0 * delta_time, 1.0 * delta_time)
+                self.speed + clamp(self.target_speed - self.speed,
+                                   - 1.0 * delta_time, 1.0 * delta_time)
                 )
             self._setDirection(
-                self.rotation + clamp(self.target_rotation - self.rotation, -2.0 * delta_time, 2.0 * delta_time)
+                self.rotation
+                + clamp(self.target_rotation - self.rotation,
+                        - 2.0 * delta_time, 2.0 * delta_time)
                 )
 
             time.sleep(0.01)
@@ -206,7 +210,6 @@ class Car(object):
         distance = self.speed * self.speed_rps \
             * self.wheel_circumference * delta_T
         steerAngle = self.rotation * self.rotation_max_angle
-
 
         offset = [
             self.vehicle_length * 0.5 * math.cos(dr['O']),

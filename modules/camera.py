@@ -13,10 +13,11 @@ from threading import Thread
 try:
     from picamera.array import PiRGBArray
     from picamera import PiCamera
-except:
-    # May not be running on an actual RPi
+except ImportError as e:
+    print("Not running on a Raspberry Pi", e)
     pass
 import datetime
+
 
 class FPS(object):
     def __init__(self):
@@ -93,17 +94,19 @@ class CameraStream(object):
             return
 
         fourcc = None
-        if callable(cv2.cv.CV_FOURCC):
-            fourcc = cv2.cv.CV_FOURCC(*'MJPG')
+        if callable(cv2.CV_FOURCC):
+            fourcc = cv2.CV_FOURCC(*'MJPG')
         else:
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
         self.video_writer = cv2.VideoWriter(
             path, fourcc,
-            self.framerate, # fps
+            self.framerate,  # fps
             (
                 int(self.resolution[0]),        # width
-                int(self.resolution[1])         # height
-            ))
+                int(self.resolution[1]),        # height
+                )
+            )
+
 
 class WebcamCameraStream(CameraStream):
     def __init__(self, src=0, resolution=(320, 240), framerate=32):
@@ -114,17 +117,17 @@ class WebcamCameraStream(CameraStream):
             resolution=resolution, framerate=framerate)
 
         self.stream = cv2.VideoCapture(src)
-        self.stream.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH,
+        self.stream.set(cv2.CAP_PROP_FRAME_WIDTH,
                         self.resolution[0])
-        self.stream.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT,
+        self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT,
                         self.resolution[1])
-        self.stream.set(cv2.cv.CV_CAP_PROP_FPS, self.framerate)
+        self.stream.set(cv2.CAP_PROP_FPS, self.framerate)
 
         self.resolution = (
-            self.stream.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH),
-            self.stream.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
+            self.stream.get(cv2.CAP_PROP_FRAME_WIDTH),
+            self.stream.get(cv2.CAP_PROP_FRAME_HEIGHT)
             )
-        self.framerate = self.stream.get(cv2.cv.CV_CAP_PROP_FPS)
+        self.framerate = self.stream.get(cv2.CAP_PROP_FPS)
         if self.framerate <= 0:
             self.framerate = framerate
 
@@ -140,6 +143,7 @@ class WebcamCameraStream(CameraStream):
             # otherwise, read the next frame from the stream
             (self.grabbed, self.frame) = self.stream.read()
             self.process(self.frame)
+
 
 class PiCameraStream(CameraStream):
     def __init__(self, resolution=(320, 240), framerate=32):
@@ -207,6 +211,7 @@ class VideoCamera(CameraStream):
         # stop the thread and release any resources
         self.stream.stop()
 
+
 class Calibration(object):
     def __init__(self, images, min_examples, pattern, grid, size):
         """ Calibrate the camera attributes using example images
@@ -253,12 +258,12 @@ class Calibration(object):
                         y * size[1] / (grid[1]-1)
                         ),
                     np.float32(
-                        (x + (y%2) * .5) * size[0] / (grid[0]-0.5)
+                        (x + (y % 2) * .5) * size[0] / (grid[0]-0.5)
                         ),
                     np.float32(0.0)
                     ]
-                    for y in range(grid[1])
-                    for x in range(grid[0])
+                for y in range(grid[1])
+                for x in range(grid[0])
                 ])
         return np.array([
             [
@@ -266,18 +271,16 @@ class Calibration(object):
                 np.float32(x * size[0] / (grid[0]-1)),
                 np.float32(0.0)
                 ]
-                for y in range(grid[1])
-                for x in range(grid[0])
+            for y in range(grid[1])
+            for x in range(grid[0])
             ])
 
     def collectExamples(self):
-        img_shape = None
         example_count = 0
         for fname in self.images:
             img = cv2.imread(fname)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             gray = cv2.medianBlur(gray, 5)
-            img_shape = gray.shape[::-1]
 
             # Find the chess board corners
             status, corners = self.method(
@@ -285,25 +288,25 @@ class Calibration(object):
                 )
 
             # If found, add object points and image points
-            if status == True:
-                print "Pattern found in '%s'" % fname
+            if status:
+                print(f"Pattern found in '{fname}'")
                 self.examples['object_points'].append(
                     self.object_points)
                 self.examples['image_points'].append(corners)
                 example_count += 1
             else:
-                print "No pattern found in '%s'" % fname
+                print(f"No pattern found in '{fname}'")
 
         if example_count < self.min_examples:
-            print "Not enough usable examples found. Need %d, only found %d" % (
-                self.min_examples, example_count
-                )
+            print(
+                "Not enough usable examples found. Need %d, only found %d" % (
+                    self.min_examples, example_count))
             return False
         return True
 
     def calibrate(self, output_file=None):
         example_count = len(self.examples['image_points'])
-        print "Calibrating based on %d samples" % example_count
+        print("Calibrating based on %d samples" % example_count)
 
         img = cv2.imread(self.images[0])
         img_shape = img.shape[::2]
@@ -323,13 +326,14 @@ class Calibration(object):
                 corners, cv2.NORM_L2) / len(corners)
             mean_error += error
 
-        print 'mtx', mtx
-        print 'dist', dist
-        print "total error: ", mean_error / example_count
+        print('mtx', mtx)
+        print('dist', dist)
+        print("total error: ", mean_error / example_count)
 
         if output_file:
             np.savez(output_file, mtx=mtx, dist=dist)
         return True
+
 
 class VisualOdometry(object):
     def __init__(self, camera):
@@ -370,7 +374,7 @@ class VisualOdometry(object):
             if self.trackGrid:
                 self.followGrid()
 
-    def initGrid(self, pattern='chess', grid=(5,5), size=(5.,5.)):
+    def initGrid(self, pattern='chess', grid=(5, 5), size=(5., 5.)):
         """ Initialize a chessboard or circle grid of SIZE mm with
         FEATURES features in PATTERN formation.
 
@@ -460,7 +464,7 @@ class VisualOdometry(object):
         # calculate optical flow
         old_features = np.float32(self.features['points'])
         if not len(old_features):
-            #Make sure we have enough features
+            # Make sure we have enough features
             self.findNewFeatures()
             return
 
@@ -486,7 +490,7 @@ class VisualOdometry(object):
             ]
 
         if len(self.features['points']) < self.features['min']:
-            #Make sure we have enough features
+            # Make sure we have enough features
             self.findNewFeatures()
 
     def getFeatures(self):
@@ -504,8 +508,7 @@ class VisualOdometry(object):
 
         new_features = cv2.goodFeaturesToTrack(
             image=self.current,
-            maxCorners=\
-                self.features['max'] - len(self.features['points']),
+            maxCorners=self.features['max'] - len(self.features['points']),
             qualityLevel=self.features['quality'],
             minDistance=self.features['distance'],
             mask=mask
@@ -513,9 +516,10 @@ class VisualOdometry(object):
 
         if new_features is not None:
             self.features['points'].extend([
-                (x,y)
+                (x, y)
                 for x, y in np.float32(new_features).reshape(-1, 2)
                 ])
+
 
 if __name__ == '__main__':
     capture = cv2.VideoCapture(-1)
