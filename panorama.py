@@ -1,66 +1,87 @@
-#!/bin/env python
+#!/usr/bin/env python
 
-import sys
+import argparse
 import os
 import cv2
 import time
 import json
 
-sys.path.insert(0, os.path.abspath(os.path.join(
-    os.path.dirname(__file__), '..'
-    )))
+from modules.camera import VideoCamera
+from modules.vehicle import Car
 
-usePiCamera=False
+usePiCamera = False
 try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
     usePiCamera = True
-except:
+except ImportError as e:
+    print("Not running on a Raspberry Pi", e)
     from test.mockobjects import MockGPIO, MockPWM as PWM
     GPIO = MockGPIO()
 
-from modules.vehicle import Car
-from modules.camera import VideoCamera
 
-config = {}
-config_file = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), 'config.json'))
-if os.path.exists(config_file):
-    with open(config_file, 'r') as config_json:
-        config = json.load(config_json)
+def panorama(config, car, camera):
+    panorama = config.get("panorama", {})
+    steps = panorama.get("steps", 6)
+    pan = panorama.get("pan", (-.2, .2))
+    tilt = panorama.get("tilt", (.6, .8))
+    delay = panorama.get("delay", 3.0)
+    directory = panorama.get("directory", "panorama")
 
-GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
-pwm = PWM()                 # The servo controller.
-pwm.frequency = 60
-
-car = Car(pwm, GPIO, config=config, debug=True)
-car.start()
-
-if __name__ == "__main__":
-    steps = 6
-    pan = (-.2,.2)
-    tilt = (.6,.8)
-    delay = 3.0
-
-    camera = VideoCamera(
-        -1, usePiCamera=usePiCamera, resolution=(1280, 720)).start()
+    os.makedirs(directory, mode=0o750, exist_ok=True)
 
     next_capture = time.time() + delay
-    reverse=False
+    reverse = False
     for y in range(steps+1):
         for x in sorted(range(steps+1), reverse=reverse):
-            car.setPanTilt(
-                pan[0] + ((pan[1]-pan[0])*x/steps),
-                tilt[0] + ((tilt[1]-tilt[0])*y/steps)
-                )
-            while True:
+            try:
+                filename = os.path.join(
+                    directory, f'image-{x:02d}-{y:02d}.png')
+                p, t = (
+                    pan[0] + ((pan[1]-pan[0])*x/steps),
+                    tilt[0] + ((tilt[1]-tilt[0])*y/steps),
+                    )
+                car.setPanTilt(p, t)
+                duration = max(0, next_capture - time.time())
+                print(f"{x},{y} [{p:.2f}, {t:.2f}]: Filename: {filename}")
+                time.sleep(duration)
                 img = camera.read()
-                if time.time() >= next_capture:
-                    next_capture = time.time() + delay
-                    cv2.imwrite('panorama/image-%02d-%02d.png' % (y, x), img)
-                    break
+                cv2.imwrite(filename, img)
+                next_capture = time.time() + delay
+            except KeyboardInterrupt:
+                break
 
         reverse = not reverse
 
+
+def loadConfig(filename):
+    config = {}
+    with open(filename, 'r') as fh:
+        config = json.load(fh)
+    return config
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Make panorama shots')
+    parser.add_argument('--config', metavar='file.json', default="config.json",
+                        help="Config file to use. [default: %{default}]")
+
+    args = parser.parse_args()
+
+    config = loadConfig(args.config)
+
+    GPIO.setmode(GPIO.BOARD)    # Number GPIOs by its physical location
+    pwm = PWM()                 # The servo controller.
+    pwm.frequency = 60
+
+    car = Car(pwm, GPIO, config=config)
+    car.start()
+
+    camera = VideoCamera(-1, usePiCamera=usePiCamera, resolution=(1280, 720))
+    camera.start()
+
+    panorama(config, car, camera)
+
     car.setPanTilt(0.0, 0.7)
+    car.stop()
     camera.stop()
