@@ -354,8 +354,7 @@ class VisualOdometry(object):
 
     def start(self):
         """ start the thread to read frames from the video stream """
-        if self.trackGrid or self.trackFeatures:
-            Thread(target=self.update, args=()).start()
+        Thread(target=self.update, args=()).start()
         return self
 
     def stop(self):
