@@ -313,7 +313,9 @@ class Calibration(object):
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             self.examples['object_points'],
             self.examples['image_points'],
-            img_shape
+            img_shape,
+            None,
+            None,
             )
 
         mean_error = 0.0
