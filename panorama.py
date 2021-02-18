@@ -49,7 +49,7 @@ def panorama(config, car, camera):
                 cv2.imwrite(filename, img)
                 next_capture = time.time() + delay
             except KeyboardInterrupt:
-                break
+                return
 
         reverse = not reverse
 
@@ -64,7 +64,7 @@ def loadConfig(filename):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Make panorama shots')
     parser.add_argument('--config', metavar='file.json', default="config.json",
-                        help="Config file to use. [default: %{default}]")
+                        help="Config file to use. [default: %(default)s]")
 
     args = parser.parse_args()
 
