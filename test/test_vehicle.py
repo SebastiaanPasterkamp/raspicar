@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.realpath(__file__)), '..'
     ))
 
-from mockobjects import MockGPIO as GPIO, MockPWM as PWM
+from .mockobjects import MockGPIO as GPIO, MockPWM as PWM
 from modules.vehicle import Car
 
 

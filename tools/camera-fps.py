@@ -1,16 +1,11 @@
 # import the necessary packages
-import os
-import sys
 from argparse import ArgumentParser
 import imutils
 import cv2
 
-sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), '..'
-    ))
-
 from modules.camera import VideoCamera
 from modules.camera import FPS
+
 
 # construct the argument parse and parse the arguments
 ap = ArgumentParser()
@@ -27,7 +22,7 @@ ap.add_argument(
 options = ap.parse_args()
 
 # grab a pointer to the video stream and initialize the FPS counter
-print "[INFO] sampling frames from the camera..."
+print("[INFO] sampling frames from the camera...")
 vs = VideoCamera(src=0, usePiCamera=options.picamera).start()
 fps = FPS().start()
 
@@ -48,8 +43,8 @@ while fps._numFrames < options.frames:
 
 # stop the timer and display FPS information
 fps.stop()
-print "[INFO] elasped time: %.2f" % fps.elapsed()
-print "[INFO] approx. FPS: %.2f" % fps.fps()
+print("[INFO] elasped time: %.2f" % fps.elapsed())
+print("[INFO] approx. FPS: %.2f" % fps.fps())
 
 # do a bit of cleanup
 cv2.destroyAllWindows()

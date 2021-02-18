@@ -2,31 +2,34 @@
 # Based on https://github.com/Nakiami/MultithreadedSimpleHTTPServer
 
 try:
-    # Python 2.x
-    from SocketServer import ThreadingMixIn
-    from SimpleHTTPServer import SimpleHTTPRequestHandler
-    from BaseHTTPServer import HTTPServer
+import sys
+from modules.camera import VideoCamera, VisualOdometry
+from modules.vehicle import Car
+import json
+from datetime import datetime
+import time
+import numpy as np
+import cv2
+import os
+# Python 2.x
+from socketserver import ThreadingMixIn
+from http.server import SimpleHTTPRequestHandler
+from http.server import HTTPServer
 except ImportError:
     # Python 3.x
     from socketserver import ThreadingMixIn
     from http.server import SimpleHTTPRequestHandler, HTTPServer
 
+
 class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     pass
 
-import sys
-import os
-import cv2
-import numpy as np
-import time
-from datetime import datetime
-import json
 
 sys.path.insert(0, os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..'
     )))
 
-usePiCamera=False
+usePiCamera = False
 try:
     import RPi.GPIO as GPIO
     from sunfounder.PCA9685 import PWM
@@ -35,8 +38,6 @@ except:
     from test.mockobjects import MockGPIO, MockPWM as PWM
     GPIO = MockGPIO()
 
-from modules.vehicle import Car
-from modules.camera import VideoCamera, VisualOdometry
 
 camera = VideoCamera(
     -1, usePiCamera=usePiCamera, resolution=(1280, 720),
@@ -46,7 +47,7 @@ camera_quality = 95
 if os.path.exists('camera_calib.npz'):
     # Load previously saved data
     with np.load('camera_calib.npz') as calib:
-        camera.mtx, camera.dist = [calib[i] for i in ('mtx','dist')]
+        camera.mtx, camera.dist = [calib[i] for i in ('mtx', 'dist')]
 
 img = camera.read()
 while img is None:
@@ -73,6 +74,8 @@ car.start()
 running = True
 capture = False
 last_snapshot = time.time()
+
+
 class CarControl(SimpleHTTPRequestHandler):
     def shutdown(self):
         super(CarControl, self).shutdown()
@@ -82,7 +85,8 @@ class CarControl(SimpleHTTPRequestHandler):
 
         if self.path == '/camera':
             self.send_response(200)
-            self.send_header('Content-type','multipart/x-mixed-replace; boundary=--jpgboundary')
+            self.send_header(
+                'Content-type', 'multipart/x-mixed-replace; boundary=--jpgboundary')
             self.end_headers()
             while running:
                 try:
@@ -99,7 +103,7 @@ class CarControl(SimpleHTTPRequestHandler):
                                 ts.strftime('capture.%Y%m%d-%H%M%S.png')
                                 ))
                             cv2.imwrite(filename, img)
-                            print "Captured", filename
+                            print("Captured", filename)
 
                     status, corners = odometry.getGrid()
                     if status:
@@ -114,8 +118,10 @@ class CarControl(SimpleHTTPRequestHandler):
                         ]
                     paths = [
                         (car.path, [center[0], center[1]], (0, 0, 255)),
-                        (odometry.grid_path, [center[0]*3, center[1]], (0, 255, 0)),
-                        (odometry.track_path, [center[0], center[1]*3], (255, 0, 0))
+                        (odometry.grid_path, [
+                         center[0]*3, center[1]], (0, 255, 0)),
+                        (odometry.track_path, [
+                         center[0], center[1]*3], (255, 0, 0))
                         ]
 
                     for path, img_center, color in paths:
@@ -148,7 +154,8 @@ class CarControl(SimpleHTTPRequestHandler):
                             -1, 8, 0
                             )
 
-                    r, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, camera_quality])
+                    r, buf = cv2.imencode(
+                        ".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, camera_quality])
                     self.wfile.write("--jpgboundary\r\n")
                     self.send_header('Content-type', 'image/jpeg')
                     self.send_header('Content-length', str(len(buf)))
@@ -156,7 +163,7 @@ class CarControl(SimpleHTTPRequestHandler):
                     self.wfile.write(bytearray(buf))
                     self.wfile.write('\r\n')
                 except Exception as e:
-                    print "Done streaming", e
+                    print("Done streaming", e)
                     break
             return
         else:
@@ -211,11 +218,12 @@ class CarControl(SimpleHTTPRequestHandler):
                         ts.strftime('video-%Y%m%d-%H%M%S.avi')
                         ))
                     camera.record(filename)
-                    print "recording to '%s', %rx%r @%r" % (
+                    print("recording to '%s', %rx%r @%r" % (
                         filename, camera.framerate,
-                        camera.resolution[0], camera.resolution[1])
+                        camera.resolution[0], camera.resolution[1]))
                 else:
                     camera.record(None)
+
 
 if __name__ == "__main__":
     port = 8000

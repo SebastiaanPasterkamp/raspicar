@@ -1,18 +1,11 @@
 #!/bin/env python
 
-import sys
 import os
-import cv2
-import json
-import numpy as np
 import glob
 from argparse import ArgumentParser
 
-sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), '..'
-    ))
-
 from modules.camera import Calibration
+
 
 # construct the argument parse and parse the arguments
 ap = ArgumentParser()
