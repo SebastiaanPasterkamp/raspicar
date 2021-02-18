@@ -183,28 +183,10 @@ pip install -r requirements.txt
 
 ### Scan a panorama
 
-Bootstrap the configuration:
+Bootstrap the configuration; then adjust as needed.
 
 ```bash
-cat <<EOF > config.json
-{
-    "camera": {
-    },
-    "car": {
-        "max_speed_rpm": 180.0,
-        "max_rotation_angle": 40.0,
-        "vehicle_length": 140.0,
-        "wheel_diameter": 65.0
-    },
-    "panorama": {
-        "steps": 6,
-        "pan": [-0.2, 0.2],
-        "tilt": [0.6, 0.8],
-        "delay": 3.0,
-        "directory": "panorama"
-    }
-}
-EOF
+cp config.json.example config.json
 ```
 
 Scan the room. Make sure a print-out of the

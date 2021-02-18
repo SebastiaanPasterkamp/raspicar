@@ -1,0 +1,29 @@
+{
+    "calibration": {
+        "minimum": 10,
+        "pattern": "asymetric",
+        "grid": {
+            "rows": 4,
+            "columns": 11
+        },
+        "size": {
+            "width": 27.65,
+            "height": 39.51
+        }
+    },
+    "camera": {
+    },
+    "car": {
+        "max_speed_rpm": 180.0,
+        "max_rotation_angle": 40.0,
+        "vehicle_length": 140.0,
+        "wheel_diameter": 65.0
+    },
+    "panorama": {
+        "steps": 6,
+        "pan": [-0.2, 0.2],
+        "tilt": [0.6, 0.8],
+        "delay": 3.0,
+        "directory": "panorama"
+    }
+}
