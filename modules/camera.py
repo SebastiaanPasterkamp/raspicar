@@ -241,12 +241,22 @@ class Calibration(object):
         self.object_points = Calibration.getObjectPoints(
             pattern, grid, size)
         self.method = cv2.findCirclesGrid
-        self.flags = cv2.CALIB_CB_CLUSTERING
+        self.flags = [
+            cv2.CALIB_CB_SYMMETRIC_GRID,
+            cv2.CALIB_CB_SYMMETRIC_GRID | cv2.CALIB_CB_CLUSTERING,
+            ]
 
         if pattern == 'asymetric':
-            self.flags = cv2.CALIB_CB_ASYMMETRIC_GRID \
-                | cv2.CALIB_CB_CLUSTERING
-        if pattern == 'chess':
+            self.flags = [
+                cv2.CALIB_CB_ASYMMETRIC_GRID,
+                cv2.CALIB_CB_ASYMMETRIC_GRID | cv2.CALIB_CB_CLUSTERING,
+                ]
+        elif pattern == 'chess':
+            self.flags = [
+                cv2.CALIB_CB_ADAPTIVE_THRESH
+                | cv2.CALIB_CB_NORMALIZE_IMAGE
+                | cv2.CALIB_CB_FAST_CHECK,
+                ]
             self.method = cv2.findChessboardCorners
 
     @staticmethod
@@ -277,15 +287,29 @@ class Calibration(object):
 
     def collectExamples(self):
         example_count = 0
+
         for fname in self.images:
             img = cv2.imread(fname)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            gray = cv2.medianBlur(gray, 5)
+            blurred = cv2.medianBlur(gray, 5)
 
             # Find the chess board corners
-            status, corners = self.method(
-                gray, self.grid, flags=self.flags
-                )
+            attempt = 1
+            for flags, image in [
+                    (flag, image)
+                    for flag in self.flags
+                    for image in (gray, blurred)
+                    ]:
+                try:
+                    status, corners = self.method(
+                        image, self.grid, flags=flags)
+                except cv2.error as e:
+                    print(e)
+                    continue
+                if status:
+                    print(f"Attempt {attempt} worked")
+                    break
+                attempt += 1
 
             # If found, add object points and image points
             if status:
