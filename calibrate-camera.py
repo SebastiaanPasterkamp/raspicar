@@ -53,7 +53,7 @@ def parse_args(config):
         required=True,
         help="Write calibration result to this .npz file.")
     ap.add_argument(
-        "--config", metavar="file.json", default="config.json",
+        "-c", "--config", metavar="file.json", default="config.json",
         help="Config file to use. [default: %(default)s]")
 
     return ap.parse_args(), ap
@@ -68,7 +68,7 @@ def loadConfig(filename):
 
 if __name__ == "__main__":
     args, ap = parse_args(dict())
-    if args.config:
+    if os.path.exists(args.config):
         # reparse args with defaults from config
         config = loadConfig(args.config)
         args, ap = parse_args(config)
