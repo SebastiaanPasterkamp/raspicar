@@ -45,8 +45,8 @@ def parse_args(config):
         "[default: %(default)s]")
     ap.add_argument(
         "-s", "--size", dest="size", metavar="width,height",
-        default="%.2f,%2f" % (size.get("width", 27.65),
-                              size.get("height", 39.51)),
+        default="%.2f,%.2f" % (size.get("width", 27.65),
+                               size.get("height", 39.51)),
         help="Real size of the example pattern in mm. [default: %(default)s]")
     ap.add_argument(
         "-o", "--output", dest="output", default=None, metavar="FILENAME.npz",
