@@ -9,7 +9,7 @@ Threaded camera IO based on:
 
 import cv2
 import numpy as np
-from threading import Thread
+from threading import Thread, Lock
 try:
     from picamera.array import PiRGBArray
     from picamera import PiCamera
@@ -62,11 +62,14 @@ class CameraStream(object):
         self.framerate = framerate
 
         self.frame = None
-        self.stopped = False
+        self.stopped = True
         self.video_writer = None
+        self.readers = {}
+        self.readers_lock = Lock()
 
     def start(self):
         """ start the thread to read frames from the video stream """
+        self.stopped = False
         Thread(target=self.update, args=()).start()
         return self
 
@@ -74,15 +77,50 @@ class CameraStream(object):
         """ Implementation specific """
         pass
 
-    def read(self):
+    def read(self, id=None):
         """ return the frame most recently read """
+        with self.readers_lock:
+            if id in self.readers:
+                self.readers[id].acquire()
         return self.frame
 
     def stop(self):
         """ indicate that the thread should be stopped """
         self.stopped = True
 
+    def addSyncedReader(self, id):
+        """ register a reader thread only interested in new frames. Their
+        thread will get a unique (by id) lock which will be blocked until a
+        fresh frame is available. """
+        if self.stopped:
+            raise RuntimeError("Cannot register synchronized readers if camera"
+                               " is not running in a thread.")
+        with self.readers_lock:
+            if id in self.readers:
+                raise ValueError(
+                    f"synchronized reader {id} is already registered.")
+            self.readers[id] = Lock()
+            self.readers[id].acquire()
+
+    def delSyncedReader(self, id):
+        """ removes a reader thread id. """
+        with self.readers_lock:
+            if id not in self.readers:
+                return
+            # Release the lock in case something is still blocked on it
+            self.readers[id].release()
+            del self.readers[id]
+
+    def loadCalibration(self, filename):
+        with np.load(filename) as calib:
+            self.mtx, self.dist = calib['mtx'], calib['dist']
+
     def process(self, frame):
+        # Inform every reader that a new frame is available
+        with self.readers_lock:
+            for lock in self.readers.values():
+                lock.release()
+
         if self.video_writer is not None:
             self.video_writer.write(frame)
 
@@ -134,7 +172,7 @@ class WebcamCameraStream(CameraStream):
         (self.grabbed, self.frame) = self.stream.read()
 
     def update(self):
-        """ keep looping infinitely until the thread is stopped """
+        """ keep looping indefinitely until the thread is stopped """
         while True:
             # if the thread indicator variable is set, stop the thread
             if self.stopped:
@@ -182,8 +220,8 @@ class VideoCamera(CameraStream):
         super(VideoCamera, self).__init__(
             resolution=resolution, framerate=framerate)
 
-        # check to see if the picamera module should be used
-        if usePiCamera:
+    # check to see if the picamera module should be used
+    if usePiCamera:
             # initialize the picamera stream and allow the camera
             # sensor to warmup
             self.stream = PiCameraStream(
@@ -193,7 +231,7 @@ class VideoCamera(CameraStream):
         # stream
         else:
             self.stream = WebcamCameraStream(
-                src=src, resolution=resolution, framerate=framerate)
+        src=src, resolution=resolution, framerate=framerate)
 
     def start(self):
         # start the threaded video stream
