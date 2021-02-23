@@ -397,10 +397,9 @@ class Calibration(object):
 class VisualOdometry(object):
     def __init__(self, camera):
         self.camera = camera
+        self.camera.addSyncedReader("odometry")
 
-        start_image = self.camera.read()
-        while start_image is None:
-            start_image = self.camera.read()
+        start_image = self.camera.read("odometry")
         self.previous = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
         self.current = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
 
@@ -421,7 +420,7 @@ class VisualOdometry(object):
 
     def update(self):
         while self.running:
-            new_frame = self.camera.read()
+            new_frame = self.camera.read("odometry")
 
             self.previous, self.current = self.current, cv2.cvtColor(
                 new_frame, cv2.COLOR_BGR2GRAY)
@@ -463,7 +462,7 @@ class VisualOdometry(object):
         track_status = False
         grid_status, corners = self.grid['method'](
             self.current,
-            self.grid['features'],
+            self.grid['grid'],
             flags=self.grid['flags']
             )
 
@@ -473,6 +472,7 @@ class VisualOdometry(object):
                 self.previous,
                 self.current,
                 self.grid['corners'],
+                None,
                 winSize=(20, 20),
                 maxLevel=2,
                 criteria=(
@@ -530,6 +530,7 @@ class VisualOdometry(object):
             self.previous,
             self.current,
             old_features,
+            None,
             winSize=(
                 int(self.features['distance']),
                 int(self.features['distance'])
@@ -580,18 +581,20 @@ class VisualOdometry(object):
 
 
 if __name__ == '__main__':
-    capture = cv2.VideoCapture(-1)
+    camera = VideoCamera()
+    camera.addSyncedReader("main")
+    camera.start()
 
-    ret, img = capture.read()
-    odometry = VisualOdometry(
-        img,
-        100, 150
+    odometry = VisualOdometry(camera)
+    odometry.initFeatures(
+        min_features=100,
+        max_features=200,
+        min_distance=32,
         )
+    odometry.start()
 
     while True:
-        ret, img = capture.read()
-        odometry.followFeatures(img)
-
+        img = camera.read("main")
         for feature in odometry.features:
             cv2.circle(
                 img,
@@ -607,4 +610,5 @@ if __name__ == '__main__':
             # ESC pressed
             break
 
-    capture.release()
+    odometry.stop()
+    camera.stop()
