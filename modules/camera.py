@@ -16,42 +16,54 @@ try:
 except ImportError as e:
     print("Not running on a Raspberry Pi", e)
     pass
-import datetime
+import time
 
 
 class FPS(object):
-    def __init__(self):
+    def __init__(self, window=1.0):
         """ store the start time, end time, and total number of frames
-        that were examined between the start and end intervals
+        that were examined between the start and end intervals. The FPS is
+        calculcated using the frames during the previous time window and the
+        current incomplete window. A new window is created when a new frame is
+        tallied beyond the window.
         """
-        self._start = None
+        self._window = window
+        self._start = [None, None]
         self._end = None
-        self._numFrames = 0
+        self._frames = [0, 0]
 
     def start(self):
         """ start the timer """
-        self._start = datetime.datetime.now()
+        self._start = [None, time.time()]
         return self
 
     def stop(self):
         """ stop the timer """
-        self._end = datetime.datetime.now()
+        self._end = time.time()
 
     def update(self):
         """ increment the total number of frames examined during the
         start and end intervals
         """
-        self._numFrames += 1
+        self._frames[1] += 1
+        if self._start[1] + self._window < time.time():
+            self._frames = [self._frames[1], 0]
+            self._start = [self._start[1], time.time()]
 
     def elapsed(self):
         """ return the total number of seconds between the start and
         end interval
         """
-        return (self._end - self._start).total_seconds()
+        if not self._start[0]:
+            return 0
+        end = self._end or time.time()
+        return end - self._start[0]
 
     def fps(self):
         """ compute the (approximate) frames per second """
-        return self._numFrames / self.elapsed()
+        if not self._start[0]:
+            return None
+        return sum(self._frames) / self.elapsed()
 
 
 class CameraStream(object):
@@ -60,6 +72,7 @@ class CameraStream(object):
         if the thread should be stopped """
         self.resolution = resolution
         self.framerate = framerate
+        self._fps = FPS()
 
         self.frame = None
         self.stopped = True
@@ -67,9 +80,13 @@ class CameraStream(object):
         self.readers = {}
         self.readers_lock = Lock()
 
+    def getFPS(self):
+        return self._fps.elapsed()
+
     def start(self):
         """ start the thread to read frames from the video stream """
         self.stopped = False
+        self._fps.start()
         Thread(target=self.update, args=()).start()
         return self
 
@@ -87,6 +104,7 @@ class CameraStream(object):
     def stop(self):
         """ indicate that the thread should be stopped """
         self.stopped = True
+        self._fps.stop()
 
     def addSyncedReader(self, id):
         """ register a reader thread only interested in new frames. Their
@@ -116,6 +134,8 @@ class CameraStream(object):
             self.mtx, self.dist = calib['mtx'], calib['dist']
 
     def process(self, frame):
+        self._fps.update()
+
         # Inform every reader that a new frame is available
         with self.readers_lock:
             for lock in self.readers.values():
