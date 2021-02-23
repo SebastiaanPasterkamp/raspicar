@@ -234,40 +234,15 @@ class PiCameraStream(CameraStream):
                 return
 
 
-class VideoCamera(CameraStream):
-    def __init__(self, src=0, usePiCamera=False,
-                 resolution=(320, 240), framerate=32):
-        super(VideoCamera, self).__init__(
-            resolution=resolution, framerate=framerate)
-
+def VideoCamera(src=0, usePiCamera=False, resolution=(320, 240), framerate=32):
     # check to see if the picamera module should be used
     if usePiCamera:
-            # initialize the picamera stream and allow the camera
-            # sensor to warmup
-            self.stream = PiCameraStream(
-                resolution=resolution, framerate=framerate)
+        # initialize the picamera stream and allow the camera sensor to warmup
+        return PiCameraStream(resolution=resolution, framerate=framerate)
 
-        # otherwise, we are using OpenCV so initialize the webcam
-        # stream
-        else:
-            self.stream = WebcamCameraStream(
+    # otherwise, we are using OpenCV so initialize the webcam stream
+    return WebcamCameraStream(
         src=src, resolution=resolution, framerate=framerate)
-
-    def start(self):
-        # start the threaded video stream
-        return self.stream.start()
-
-    def update(self):
-        # grab the next frame from the stream
-        self.stream.update()
-
-    def read(self):
-        # return the current frame
-        return self.stream.read()
-
-    def stop(self):
-        # stop the thread and release any resources
-        self.stream.stop()
 
 
 class Calibration(object):
