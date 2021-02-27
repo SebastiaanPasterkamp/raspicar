@@ -1,0 +1,5 @@
+opencv-contrib-python==4.1.0.25
+picamera==1.13
+RPi.GPIO==0.7.0
+smbus==1.1.post2
+pkg-resources==0.0.0

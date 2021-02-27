@@ -1,3 +1,9 @@
 *~
 *.pyc
+*.npz
+*.bak
+*.png
+*.jpg
 config.json
+.raspicar
+.coverage

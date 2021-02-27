@@ -178,7 +178,10 @@ In a fresh check-out of this repository:
 ```bash
 python3 -m venv .raspicar
 . .raspicar/bin/activate
-pip install -r requirements.txt
+# For raspbian
+pip install -r requirements.txt -r requirements-raspberian.txt
+# For non-raspbian
+pip install -r requirements.txt -r requirements-nonpi.txt
 ```
 
 ### Scan a panorama
