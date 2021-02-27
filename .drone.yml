@@ -1,0 +1,40 @@
+---
+kind: pipeline
+type: docker
+name: Test
+
+platform:
+    os: linux
+    arch: arm
+
+steps:
+  - name: test:unit
+    image: python:3.7-slim
+    volumes:
+      - name: pip-cache
+        path: /root/.cache/pip
+    commands:
+      - apt-get update
+      - apt-get install libatlas-base-dev
+      - python -m venv .raspicar
+      - echo '[global]\nextra-index-url=https://www.piwheels.org/simple' > .raspicar/pip.conf
+      - . .raspicar/bin/activate
+      - pip install --requirement requirements.txt
+      - coverage run
+
+  - name: test:coverage
+    image: python:3.8-slim
+    commands:
+      - coverage report
+    depends_on:
+      - test:unit
+
+volumes:
+  - name: pip-cache
+    host:
+      path: /var/cache/drone/pip
+---
+kind: signature
+hmac: 9a92d9ef5ac946b90d4fb5d0acfb777f6f04748341c41bb08b981504657e0706
+
+...
