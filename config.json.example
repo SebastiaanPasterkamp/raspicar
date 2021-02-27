@@ -9,9 +9,15 @@
         "size": {
             "width": 27.65,
             "height": 39.51
-        }
+        },
+        "npz": "camera.npz"
     },
     "camera": {
+        "index": -1,
+        "resolution": {
+            "width": 1280,
+            "height": 720
+        }
     },
     "car": {
         "max_speed_rpm": 180.0,

@@ -1,38 +1,57 @@
 #!/usr/bin/env python
 
-import os
-import glob
-import json
 from argparse import ArgumentParser
+import cv2
+import json
+import os
 
-from modules.camera import Calibration
-
-
-def main(examples, minimum, pattern, grid, size, output):
-    file_pattern = os.path.abspath(examples)
-    images = glob.glob(file_pattern)
-
-    calib = Calibration(images, minimum, pattern, grid, size)
-
-    if calib.collectExamples():
-        calib.calibrate(output)
+from modules.camera import VideoCamera, Calibration
 
 
-def parse_args(config):
+def main(examples, resolution, minimum, pattern, grid, size, output, debug):
+    calib = Calibration(pattern, grid, size)
+
+    camera = VideoCamera(patterns=examples, resolution=resolution)
+    image = camera.read()
+    while image is not None:
+        calib.addImage(image)
+
+        status, corners = calib.findGrid(image)
+        if debug:
+            # Draw and display the corners
+            cv2.drawChessboardCorners(image, grid, corners, status)
+            cv2.imshow('cam', image)
+            cv2.waitKey(1)
+
+        image = camera.read()
+
+    if debug:
+        cv2.destroyAllWindows()
+
+    calib.calibrate(minimum, output)
+
+
+def parse_args(config, add_help=True):
+    camera = config.get("camera", {})
+    res = camera.get("resolution", {})
     calib = config.get("calibration", {})
     grid = calib.get("grid", {})
     size = calib.get("size", {})
 
-    ap = ArgumentParser()
+    ap = ArgumentParser(add_help=add_help)
+    if not add_help:
+        ap.add_argument(
+            "-h", "--help", default=False, action='store_true',
+            help="Show this help message and exit")
     ap.add_argument(
         "-m", "--minimum", dest="minimum", type=int,
         default=calib.get("minimum", 10),
         help="Minimum number of examples to calibrate with. "
         "[default: %(default)d]")
     ap.add_argument(
-        "-e", "--examples", default="capture/*.png", dest="examples",
-        metavar="GLOB", help="Use these examples (glob pattern). "
-        "[default: %(default)s]")
+        "-e", "--examples", default=[], dest="examples",
+        action='append', metavar="GLOB",
+        help="Use these examples (glob pattern). [default: %(default)s]")
     ap.add_argument(
         "-p", "--pattern", dest="pattern",
         default=calib.get("pattern", "asymetric"),
@@ -53,8 +72,16 @@ def parse_args(config):
         required=True,
         help="Write calibration result to this .npz file.")
     ap.add_argument(
+        "-r", "--resolution", dest="resolution", metavar="WIDTH,HEIGHT",
+        default="%d,%d" % (res.get("width", 320), res.get("height", 240)),
+        help="Set camera resolution. [default: %(default)s]")
+    ap.add_argument(
         "-c", "--config", metavar="file.json", default="config.json",
         help="Config file to use. [default: %(default)s]")
+    ap.add_argument(
+        "-d", "--debug", default=False, action='store_true',
+        help="Enable debugging by displaying the results "
+        "[default: %(default)s]")
 
     return ap.parse_args(), ap
 
@@ -67,20 +94,24 @@ def loadConfig(filename):
 
 
 if __name__ == "__main__":
-    args, ap = parse_args(dict())
+    config = dict()
+    args, ap = parse_args(config, False)
     if os.path.exists(args.config):
         # reparse args with defaults from config
         config = loadConfig(args.config)
-        args, ap = parse_args(config)
+    args, ap = parse_args(config)
 
     args.grid = tuple([int(g) for g in args.grid.split(",")])
     args.size = tuple([float(s) for s in args.size.split(",")])
+    args.resolution = tuple([int(s) for s in args.resolution.split(",")])
 
     main(
         examples=args.examples,
+        resolution=args.resolution,
         minimum=args.minimum,
         pattern=args.pattern,
         grid=args.grid,
         size=args.size,
         output=args.output,
+        debug=args.debug,
         )
