@@ -70,18 +70,18 @@ class Car(object):
         # Motor PWM pins
         self.motor_speed_controller = motor.get('pwm_speed_ctrl', [
             4,          # servo driver IC CH4
-            5           # servo driver IC CH5
+            5,          # servo driver IC CH5
             ])
 
         # Motor GPIO pins to set HIGH when moving forward
         self.forward = motor.get('forward', [
             11,         # pin11 - motor 0
-            13          # pin13 - motor 1
+            13,         # pin13 - motor 1
             ])
         # Motor GPIO pins to set HIGH when moving backwards
         self.backwards = motor.get('backwards', [
             12,         # pin12 - motor 0
-            15          # pin15 - motor 1
+            15,         # pin15 - motor 1
             ])
         # Max value for PWM
         self.speed_max = motor.get('max_speed', 4000.0)
@@ -89,7 +89,7 @@ class Car(object):
 
         # Steering PWM pin
         self.steering_controller = steering.get('pwm_direction_ctrl', [
-            0           # servo driver IC CH0
+            0,          # servo driver IC CH0
             ])
         self.rotation_max = steering.get('max_rotation', 75.0)
         # Default servo position for straight forward
@@ -98,10 +98,10 @@ class Car(object):
 
         # Pan/Tilt PWM pins
         self.pan_controller = camera.get('pwm_pan_ctrl', [
-            14          # servo driver IC CH14
+            14,         # servo driver IC CH14
             ])
         self.tilt_controller = camera.get('pwm_tilt_ctrl', [
-            15          # servo driver IC CH15
+            15,         # servo driver IC CH15
             ])
         self.pan_max = camera.get('max_pan', 250.0)
         self.tilt_max = camera.get('max_tilt', 250.0)
@@ -178,33 +178,35 @@ class Car(object):
             'O': 0.0  # Orientation
             }
         last_time = time.time()
-        def clamp(n, minn, maxn): return max(min(maxn, n), minn)
         time.sleep(0.01)
         last_position = self.getPosition()
         while self.running:
             last_time, delta_time = time.time(), time.time() - last_time
-
-            self.dead_reckoning = self._DeadReckoning(
-                self.dead_reckoning,
-                delta_time
-                )
-
-            delta = self.getPosition(last_position)
-            if delta[0]**2.0 + delta[1]**2.0 > 1.0:
-                last_position = self.getPosition()
-                self.path.append(last_position)
-
-            self._setSpeed(
-                self.speed + clamp(self.target_speed - self.speed,
-                                   - 1.0 * delta_time, 1.0 * delta_time)
-                )
-            self._setDirection(
-                self.rotation
-                + clamp(self.target_rotation - self.rotation,
-                        - 2.0 * delta_time, 2.0 * delta_time)
-                )
-
+            last_position = self._update(last_position, delta_time)
             time.sleep(0.01)
+
+    def _update(self, last_position, delta_time):
+        self.dead_reckoning = self._DeadReckoning(
+            self.dead_reckoning,
+            delta_time
+            )
+
+        delta = self.getPosition(last_position)
+        if delta[0]**2.0 + delta[1]**2.0 > 1.0:
+            last_position = self.getPosition()
+            self.path.append(last_position)
+
+        self._setSpeed(
+            self.speed + clamp(self.target_speed - self.speed,
+                               - 1.0 * delta_time, 1.0 * delta_time)
+            )
+        self._setDirection(
+            self.rotation
+            + clamp(self.target_rotation - self.rotation,
+                    - 2.0 * delta_time, 2.0 * delta_time)
+            )
+
+        return last_position
 
     def _DeadReckoning(self, dr, delta_T):
         distance = self.speed * self.speed_rps \
@@ -400,3 +402,7 @@ if __name__ == '__main__':
         time.sleep(0.25)
 
     car.stop()
+
+
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
