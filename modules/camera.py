@@ -7,6 +7,8 @@ Threaded camera IO based on:
   http://www.pyimagesearch.com/2015/12/21/increasing-webcam-fps-with-python-and-opencv/
 """
 
+import os
+import glob
 import cv2
 import numpy as np
 from threading import Thread, Lock
@@ -234,11 +236,58 @@ class PiCameraStream(CameraStream):
                 return
 
 
-def VideoCamera(src=0, usePiCamera=False, resolution=(320, 240), framerate=32):
+class SlideShowCamera(CameraStream):
+    def __init__(self, resolution=(320, 240), framerate=32):
+        super(SlideShowCamera, self).__init__(
+            resolution=resolution, framerate=framerate)
+        self.index = 0
+        self.images = []
+
+    def loadImages(self, pattern):
+        file_pattern = os.path.abspath(pattern)
+        self.images.extend(sorted(glob.glob(file_pattern)))
+        if self.frame is None and len(self.images):
+            self.readImage(self.images[0])
+
+    def readImage(self, path):
+        frame = cv2.imread(path)
+        self.frame = cv2.resize(frame, self.resolution)
+
+    def update(self):
+        while True:
+            # if the thread indicator variable is set, stop the thread
+            if self.stopped:
+                return
+
+            # otherwise, read the next frame from the stream
+            self.readImage(self.images[self.index])
+            self.process(self.frame)
+            time.sleep(1.0 / self.framerate)
+
+    def read(self, id=None):
+        """ return the frame most recently read """
+        frame = super(SlideShowCamera, self).read(id)
+        self.index += 1
+        if self.index >= len(self.images):
+            self.stop()
+            self.frame = None
+        elif self.stopped:
+            self.readImage(self.images[self.index])
+        return frame
+
+
+def VideoCamera(src=0, usePiCamera=False, patterns=[], resolution=(320, 240),
+                framerate=32):
     # check to see if the picamera module should be used
     if usePiCamera:
         # initialize the picamera stream and allow the camera sensor to warmup
         return PiCameraStream(resolution=resolution, framerate=framerate)
+
+    if len(patterns):
+        camera = SlideShowCamera(resolution=resolution, framerate=framerate)
+        for pattern in patterns:
+            camera.loadImages(pattern)
+        return camera
 
     # otherwise, we are using OpenCV so initialize the webcam stream
     return WebcamCameraStream(
@@ -246,13 +295,10 @@ def VideoCamera(src=0, usePiCamera=False, resolution=(320, 240), framerate=32):
 
 
 class Calibration(object):
-    def __init__(self, images, min_examples, pattern, grid, size):
+    def __init__(self, pattern, grid, size):
         """ Calibrate the camera attributes using example images
         containing a known calibration pattern.
 
-        - images:       list of example images potentially containing
-                        a detectable pattern (not guarenteed).
-        - min_examples: minimum number of examples to calibrate with.
         - pattern:      type of pattern in the image: chess, circles,
                         or asymetric.
         - grid:         number of features in the example pattern.
@@ -260,25 +306,18 @@ class Calibration(object):
 
         The geometries are expected to be (width, height).
         """
-
-        self.images = images
-        self.min_examples = min_examples
         self.pattern = pattern
         self.grid = grid
         self.size = size
 
-        self.examples = {
-            'object_points': [],
-            'image_points': []
-            }
-        self.object_points = Calibration.getObjectPoints(
-            pattern, grid, size)
+        self.resolution = (0, 0)
+        self.image_points = []
+        self.object_points = Calibration.getObjectPoints(pattern, grid, size)
         self.method = cv2.findCirclesGrid
         self.flags = [
             cv2.CALIB_CB_SYMMETRIC_GRID,
             cv2.CALIB_CB_SYMMETRIC_GRID | cv2.CALIB_CB_CLUSTERING,
             ]
-
         if pattern == 'asymetric':
             self.flags = [
                 cv2.CALIB_CB_ASYMMETRIC_GRID,
@@ -297,13 +336,9 @@ class Calibration(object):
         if pattern == 'asymetric':
             return np.array([
                 [
-                    np.float32(
-                        y * size[1] / (grid[1]-1)
-                        ),
-                    np.float32(
-                        (x + (y % 2) * .5) * size[0] / (grid[0]-0.5)
-                        ),
-                    np.float32(0.0)
+                    np.float32(y * size[1] / (grid[1]-1)),
+                    np.float32((x + (y % 2) * .5) * size[0] / (grid[0]-0.5)),
+                    np.float32(0.0),
                     ]
                 for y in range(grid[1])
                 for x in range(grid[0])
@@ -312,65 +347,66 @@ class Calibration(object):
             [
                 np.float32(y * size[1] / (grid[1]-1)),
                 np.float32(x * size[0] / (grid[0]-1)),
-                np.float32(0.0)
+                np.float32(0.0),
                 ]
             for y in range(grid[1])
             for x in range(grid[0])
             ])
 
-    def collectExamples(self):
-        example_count = 0
+    def addImage(self, image):
+        if not self.resolution[0]:
+            self.resolution = tuple(image.shape[:2])
+        status, corners = self.findGrid(image)
+        if status:
+            self.image_points.append(corners)
 
-        for fname in self.images:
-            img = cv2.imread(fname)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.medianBlur(gray, 5)
+    def addImages(self, images):
+        for image in images:
+            self.addImage(image)
 
-            # Find the chess board corners
-            attempt = 1
-            for flags, image in [
-                    (flag, image)
-                    for flag in self.flags
-                    for image in (gray, blurred)
-                    ]:
-                try:
-                    status, corners = self.method(
-                        image, self.grid, flags=flags)
-                except cv2.error as e:
-                    print(e)
-                    continue
-                if status:
-                    print(f"Attempt {attempt} worked")
-                    break
-                attempt += 1
+    def findGrid(self, image):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.medianBlur(gray, 5)
 
-            # If found, add object points and image points
+        # Find the chess board corners
+        attempt = 1
+        for flags, img in [
+                (flag, img)
+                for flag in self.flags
+                for img in (gray, blurred)
+                ]:
+            try:
+                status, corners = self.method(img, self.grid, flags=flags)
+            except cv2.error as e:
+                print(e)
+                continue
             if status:
-                print(f"Pattern found in '{fname}'")
-                self.examples['object_points'].append(
-                    self.object_points)
-                self.examples['image_points'].append(corners)
-                example_count += 1
-            else:
-                print(f"No pattern found in '{fname}'")
+                break
+            attempt += 1
 
-        if example_count < self.min_examples:
+        # If found, add object points and image points
+        return status, corners
+
+    def getPose(self, corners, camera):
+        return cv2.solvePnPRansac(
+            self.object_points,
+            corners,
+            camera.mtx, camera.dist
+            )
+
+    def calibrate(self, min_examples=None, output_file=None):
+        example_count = len(self.image_points)
+        if example_count < min_examples:
             print(
                 "Not enough usable examples found. Need %d, only found %d" % (
-                    self.min_examples, example_count))
+                    min_examples, example_count))
             return False
-        return True
-
-    def calibrate(self, output_file=None):
-        example_count = len(self.examples['image_points'])
         print("Calibrating based on %d samples" % example_count)
 
-        img = cv2.imread(self.images[0])
-        img_shape = img.shape[::2]
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-            self.examples['object_points'],
-            self.examples['image_points'],
-            img_shape,
+            [self.object_points for _ in self.image_points],
+            self.image_points,
+            self.resolution,
             None,
             None,
             )
@@ -378,12 +414,10 @@ class Calibration(object):
         mean_error = 0.0
         for i in range(example_count):
             corners, _ = cv2.projectPoints(
-                self.examples['object_points'][i],
+                self.object_points,
                 rvecs[i], tvecs[i], mtx, dist)
-            error = cv2.norm(
-                self.examples['image_points'][i],
-                corners, cv2.NORM_L2) / len(corners)
-            mean_error += error
+            error = cv2.norm(self.image_points[i], corners, cv2.NORM_L2)
+            mean_error += error / len(corners)
 
         print('mtx', mtx)
         print('dist', dist)
@@ -397,11 +431,8 @@ class Calibration(object):
 class VisualOdometry(object):
     def __init__(self, camera):
         self.camera = camera
-        self.camera.addSyncedReader("odometry")
-
-        start_image = self.camera.read("odometry")
-        self.previous = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
-        self.current = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
+        self.previous = None
+        self.current = None
 
         self.grid_path = []
         self.track_path = []
@@ -412,6 +443,11 @@ class VisualOdometry(object):
 
     def start(self):
         """ start the thread to read frames from the video stream """
+        self.camera.addSyncedReader("odometry")
+        start_image = self.camera.read("odometry")
+        self.previous = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
+        self.current = cv2.cvtColor(start_image, cv2.COLOR_BGR2GRAY)
+
         Thread(target=self.update, args=()).start()
         return self
 
@@ -420,16 +456,19 @@ class VisualOdometry(object):
 
     def update(self):
         while self.running:
-            new_frame = self.camera.read("odometry")
+            self.setFrame(self.camera.read("odometry"))
 
-            self.previous, self.current = self.current, cv2.cvtColor(
-                new_frame, cv2.COLOR_BGR2GRAY)
+    def setFrame(self, frame):
+        self.previous, self.current = (
+            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+            self.current,
+            )
 
-            if self.trackFeatures:
-                self.followFeatures()
+        if self.trackFeatures:
+            self.followFeatures()
 
-            if self.trackGrid:
-                self.followGrid()
+        if self.trackGrid:
+            self.followGrid()
 
     def initGrid(self, pattern='chess', grid=(5, 5), size=(5., 5.)):
         """ Initialize a chessboard or circle grid of SIZE mm with
@@ -441,30 +480,12 @@ class VisualOdometry(object):
         - size:         tuple of (width, height) in mm
         """
 
-        self.grid = {
-            'pattern': pattern,
-            'grid': grid,
-            'size': size,
-            'objp': Calibration.getObjectPoints(pattern, grid, size),
-            'method': cv2.findCirclesGrid,
-            'flags': cv2.CALIB_CB_CLUSTERING,
-            'status': False,
-            'corners': None
-            }
-        if self.grid['pattern'] == 'asymetric':
-            self.grid['flags'] = cv2.CALIB_CB_ASYMMETRIC_GRID \
-                | cv2.CALIB_CB_CLUSTERING
-        if self.grid['pattern'] == 'chess':
-            self.grid['method'] = cv2.findChessboardCorners
-        self.trackGrid = True
+        self.calibration = Calibration(pattern, grid, size)
 
     def followGrid(self):
         track_status = False
-        grid_status, corners = self.grid['method'](
-            self.current,
-            self.grid['grid'],
-            flags=self.grid['flags']
-            )
+
+        grid_status, corners = self.calibration.findGrid(self.current)
 
         if not grid_status and self.grid['corners'] is not None:
             # calculate optical flow
@@ -488,24 +509,20 @@ class VisualOdometry(object):
 
         if grid_status or track_status:
             self.grid['status'], self.grid['corners'] = True, corners
+            rvecs, tvecs, inliers = self.calibrate.getPose(
+                corners, self.camera)
 
-            rvecs, tvecs, inliers = cv2.solvePnPRansac(
-                self.grid['objp'],
-                corners,
-                self.camera.mtx, self.camera.dist
-                )
             if grid_status:
                 self.grid_path.append([tvecs[2][0], tvecs[0][0]])
             self.track_path.append([tvecs[2][0], tvecs[0][0]])
 
     def getGrid(self):
-        if self.trackGrid:
+        if self.calibration is not None:
             return self.grid['status'], self.grid['corners']
         return False, []
 
     def initFeatures(self, min_features=100, max_features=200,
                      min_distance=32):
-
         self.features = {
             'min': min_features,
             'max': max_features,
