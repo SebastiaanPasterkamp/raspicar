@@ -294,6 +294,31 @@ def VideoCamera(src=0, usePiCamera=False, patterns=[], resolution=(320, 240),
         src=src, resolution=resolution, framerate=framerate)
 
 
+def parseArguments(ap, config={}):
+    camera = config.get("camera", {})
+    res = camera.get("resolution", {})
+
+    group = ap.add_argument_group(
+        "Camera",
+        "Parameters to configure the camera.",
+        )
+
+    group.add_argument(
+        "-i", "--index", default=camera.get("index", -1),
+        help="Camera index (-1 is auto select) [default: %(default)s]")
+    group.add_argument(
+        "--glob", default=[], dest="patterns", action='append', metavar="GLOB",
+        help="Read images by glob pattern [default: %(default)s]")
+    group.add_argument(
+        "-r", "--resolution", dest="resolution", metavar="WIDTH,HEIGHT",
+        default="%d,%d" % (res.get("width", 320), res.get("height", 240)),
+        help="Set camera resolution [default: %(default)s]")
+    group.add_argument(
+        "-f", "--framerate", dest="framerate", type=int,
+        default=camera.get('framerate', 30),
+        help="Set camera FPS [default: %(default)s]")
+
+
 class Calibration(object):
     def __init__(self, pattern, grid, size):
         """ Calibrate the camera attributes using example images
@@ -330,6 +355,45 @@ class Calibration(object):
                 | cv2.CALIB_CB_FAST_CHECK,
                 ]
             self.method = cv2.findChessboardCorners
+
+    @staticmethod
+    def parseArguments(ap, config={}):
+        calib = config.get("calibration", {})
+        grid = calib.get("grid", {})
+        size = calib.get("size", {})
+
+        group = ap.add_argument_group(
+            "Calibration",
+            "Parameters used for camera calibration, or pattern finding.",
+            )
+
+        group.add_argument(
+            "-p", "--pattern", dest="pattern",
+            default=calib.get("pattern", "asymetric"),
+            choices=["chess", "circles", "asymetric"],
+            help="Type of calibration pattern used [default: %(default)s]")
+        group.add_argument(
+            "-g", "--grid", dest="grid", metavar="rows,columns",
+            default="%d,%d" % (grid.get("rows", 4), grid.get("columns", 11)),
+            help="Grid size of the example pattern in number of corners / dots"
+            " [default: %(default)s]")
+        group.add_argument(
+            "-s", "--size", dest="size", metavar="width,height",
+            default="%.2f,%.2f" % (
+                size.get("width", 27.65),
+                size.get("height", 39.51)),
+            help="Real size of the example pattern in mm"
+            " [default: %(default)s]")
+        group.add_argument(
+            "-m", "--minimum", dest="minimum", type=int,
+            default=calib.get("minimum", 10),
+            help="Minimum number of examples to calibrate with"
+            " [default: %(default)d]")
+        group.add_argument(
+            "--npz", dest="npz", metavar="FILENAME.npz",
+            default=calib.get("npz"),
+            help="Read/Write calibration result to this .npz file "
+            " [default: %(default)d]")
 
     @staticmethod
     def getObjectPoints(pattern, grid, size):
