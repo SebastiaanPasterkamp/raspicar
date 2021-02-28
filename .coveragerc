@@ -9,6 +9,7 @@ omit =
 source =
     modules
     pid
+    rotation
     sunfounder
     tools
 
