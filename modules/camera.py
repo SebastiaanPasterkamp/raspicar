@@ -260,20 +260,18 @@ class SlideShowCamera(CameraStream):
                 return
 
             # otherwise, read the next frame from the stream
-            self.readImage(self.images[self.index])
             self.process(self.frame)
             time.sleep(1.0 / self.framerate)
 
     def read(self, id=None):
         """ return the frame most recently read """
-        frame = super(SlideShowCamera, self).read(id)
-        self.index += 1
         if self.index >= len(self.images):
             self.stop()
             self.frame = None
-        elif self.stopped:
+        elif not self.stopped:
             self.readImage(self.images[self.index])
-        return frame
+            self.index += 1
+        return super(SlideShowCamera, self).read(id)
 
 
 def VideoCamera(src=0, usePiCamera=False, patterns=[], resolution=(320, 240),
