@@ -52,6 +52,26 @@ def panorama(config, car, camera, calib):
                 print(f"{x},{y} [{p:.2f}, {t:.2f}]: Filename: {filename}")
                 time.sleep(duration)
                 img = camera.read()
+
+                status, corners = calib.findGrid(img)
+                if status:
+                    try:
+                        status, rvecs, tvecs, _ = \
+                            calib.getPose(corners, camera)
+                    except cv2.error as e:
+                        print(e)
+                        pass
+
+                if status:
+                    try:
+                        print("PnP:")
+                        print(f" - Rotation: {rvecs}")
+                        print(f" - Translation: {tvecs}")
+                        print(f" - Anlgles {matrixToEuler(rvecs)}")
+                    except AssertionError as e:
+                        print(e)
+                        pass
+
                 cv2.imwrite(filename, img)
                 next_capture = time.time() + delay
 
