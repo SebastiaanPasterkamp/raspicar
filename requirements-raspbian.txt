@@ -1,4 +1,4 @@
-opencv-contrib-python==4.1.0.25
+opencv-contrib-python==4.2.0.32
 picamera==1.13
 RPi.GPIO==0.7.0
 smbus==1.1.post2
